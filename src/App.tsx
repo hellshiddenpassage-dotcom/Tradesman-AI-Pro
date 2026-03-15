@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 
+const BASIC_STRIPE_LINK = "https://buy.stripe.com/eVqdR26372Cb7BW8Y5d7q03";
+const PRO_STRIPE_LINK = "https://buy.stripe.com/dRmfZa3UZa4D7BWgqxd7q04";
+
 type ThemeMode = "dark" | "light";
 type Plan = "basic" | "pro";
-
 type Tool =
   | "dashboard"
   | "settings"
@@ -89,16 +91,13 @@ type TroubleForm = {
   severity: string;
 };
 
-const BASIC_STRIPE_LINK = "https://buy.stripe.com/eVqdR26372Cb7BW8Y5d7q03";
-const PRO_STRIPE_LINK = "https://buy.stripe.com/dRmfZa3UZa4D7BWgqxd7q04";
-
-const SETTINGS_KEY = "tradesman_ai_company_settings_v1";
-const THEME_KEY = "tradesman_ai_theme_v1";
-const PLAN_KEY = "tradesman_ai_plan_v1";
+const SETTINGS_KEY = "tradesman_ai_company_settings_v2";
+const THEME_KEY = "tradesman_ai_theme_v2";
+const PLAN_KEY = "tradesman_ai_plan_v2";
 
 const defaultSettings: CompanySettings = {
   companyName: "Your Company",
-  location: "Scottsbluff, NE",
+  location: "Your City",
   laborRate: 85,
   equipmentRate: 110,
   materialPricePerTon: 22,
@@ -114,8 +113,7 @@ const defaultSettings: CompanySettings = {
 function getInitialSettings(): CompanySettings {
   try {
     const saved = localStorage.getItem(SETTINGS_KEY);
-    if (!saved) return defaultSettings;
-    return { ...defaultSettings, ...JSON.parse(saved) };
+    return saved ? { ...defaultSettings, ...JSON.parse(saved) } : defaultSettings;
   } catch {
     return defaultSettings;
   }
@@ -141,10 +139,13 @@ function getInitialPlan(): Plan {
 
 export default function App() {
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
-  const [activePlan, setActivePlan] = useState<Plan>(getInitialPlan);
-  const [activeTool, setActiveTool] = useState<Tool>("dashboard");
+  const [plan, setPlan] = useState<Plan>(getInitialPlan);
+  const [tool, setTool] = useState<Tool>("dashboard");
+  const [output, setOutput] = useState(
+    "Your generated output will appear here."
+  );
+
   const [settings, setSettings] = useState<CompanySettings>(getInitialSettings);
-  const [output, setOutput] = useState("Your generated output will appear here.");
 
   const [estimate, setEstimate] = useState<EstimateForm>({
     jobType: "Pad Prep / Gravel",
@@ -171,7 +172,7 @@ export default function App() {
     exclusions:
       "Hidden underground obstructions, unmarked utilities, weather delays, and work not specifically listed.",
     timeline:
-      "Work to be scheduled based on weather, site access, material availability, and contractor availability.",
+      "Work to be scheduled based on weather, access, material availability, and contractor availability.",
   });
 
   const [invoice, setInvoice] = useState<InvoiceForm>({
@@ -181,7 +182,11 @@ export default function App() {
     taxPercent: getInitialSettings().taxPercent,
     notes: "",
     items: [
-      { description: "Labor", quantity: 8, unitPrice: getInitialSettings().laborRate },
+      {
+        description: "Labor",
+        quantity: 8,
+        unitPrice: getInitialSettings().laborRate,
+      },
       {
         description: "Equipment",
         quantity: 6,
@@ -230,8 +235,8 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => {
-    localStorage.setItem(PLAN_KEY, activePlan);
-  }, [activePlan]);
+    localStorage.setItem(PLAN_KEY, plan);
+  }, [plan]);
 
   const colors = useMemo(() => {
     if (theme === "light") {
@@ -247,6 +252,7 @@ export default function App() {
         outputBg: "#f8fafc",
         inputBg: "#ffffff",
         danger: "#b42318",
+        success: "#067647",
       };
     }
 
@@ -262,6 +268,7 @@ export default function App() {
       outputBg: "#111827",
       inputBg: "#0f1724",
       danger: "#ef4444",
+      success: "#22c55e",
     };
   }, [theme]);
 
@@ -321,7 +328,11 @@ export default function App() {
       taxPercent: settings.taxPercent,
       items: [
         { description: "Labor", quantity: 8, unitPrice: settings.laborRate },
-        { description: "Equipment", quantity: 6, unitPrice: settings.equipmentRate },
+        {
+          description: "Equipment",
+          quantity: 6,
+          unitPrice: settings.equipmentRate,
+        },
         {
           description: "Material Delivery",
           quantity: 20,
@@ -330,7 +341,7 @@ export default function App() {
       ],
     }));
 
-    setOutput(`Company settings saved.
+    setOutput(`COMPANY SETTINGS SAVED
 
 Company:
 ${settings.companyName}
@@ -338,10 +349,10 @@ ${settings.companyName}
 Location:
 ${settings.location}
 
-Defaults updated:
+Defaults Updated:
 - Labor Rate: ${currency(settings.laborRate)}
 - Equipment Rate: ${currency(settings.equipmentRate)}
-- Material Price/Ton: ${currency(settings.materialPricePerTon)}
+- Material Price / Ton: ${currency(settings.materialPricePerTon)}
 - Markup: ${settings.markupPercent}%
 - Tax: ${settings.taxPercent}%
 - Dashboard Language: ${settings.dashboardLanguage}
@@ -509,7 +520,7 @@ ${contract.signatures}`);
   }
 
   function generateTroubleshoot() {
-    if (activePlan !== "pro") {
+    if (plan !== "pro") {
       setOutput(
         "Troubleshooting Assistant is part of the Pro plan. Upgrade to Pro to unlock AI-assisted troubleshooting."
       );
@@ -561,20 +572,19 @@ Start with electrical and fluid checks before replacing parts. Confirm whether t
   }
 
   function generateFromActiveTool() {
-    if (activeTool === "settings") applySettingsToForms();
-    if (activeTool === "estimate") generateEstimate();
-    if (activeTool === "scope") generateScope();
-    if (activeTool === "invoice") generateInvoice();
-    if (activeTool === "contract") generateContract();
-    if (activeTool === "troubleshoot") generateTroubleshoot();
+    if (tool === "settings") applySettingsToForms();
+    if (tool === "estimate") generateEstimate();
+    if (tool === "scope") generateScope();
+    if (tool === "invoice") generateInvoice();
+    if (tool === "contract") generateContract();
+    if (tool === "troubleshoot") generateTroubleshoot();
   }
 
   function copyOutput() {
     navigator.clipboard.writeText(output);
   }
 
-  function toolBtnStyle(tool: Tool): React.CSSProperties {
-    const active = activeTool === tool;
+  function toolBtnStyle(active: boolean, disabled = false): React.CSSProperties {
     return {
       width: "100%",
       textAlign: "left",
@@ -586,7 +596,7 @@ Start with electrical and fluid checks before replacing parts. Confirm whether t
       cursor: "pointer",
       fontWeight: 700,
       marginBottom: 10,
-      opacity: tool === "troubleshoot" && activePlan !== "pro" ? 0.7 : 1,
+      opacity: disabled ? 0.65 : 1,
     };
   }
 
@@ -600,7 +610,7 @@ Start with electrical and fluid checks before replacing parts. Confirm whether t
         padding: 20,
       }}
     >
-      <div style={{ maxWidth: 1480, margin: "0 auto" }}>
+      <div style={{ maxWidth: 1200, margin: "0 auto" }}>
         <div
           style={{
             background: `linear-gradient(180deg, ${colors.panelAlt}, ${colors.panelBg})`,
@@ -618,7 +628,7 @@ Start with electrical and fluid checks before replacing parts. Confirm whether t
           <div>
             <div style={{ fontSize: 32, fontWeight: 900 }}>Tradesman AI</div>
             <div style={{ color: colors.muted, marginTop: 6 }}>
-              Company-configured estimating, scopes, invoices, contracts, and Pro AI troubleshooting.
+              Contractor tools for estimates, scopes, invoices, contracts, and Pro troubleshooting.
             </div>
           </div>
 
@@ -653,10 +663,10 @@ Start with electrical and fluid checks before replacing parts. Confirm whether t
           >
             <div
               style={{
-                border: `1px solid ${activePlan === "basic" ? colors.accent : colors.border}`,
+                border: `1px solid ${plan === "basic" ? colors.accent : colors.border}`,
                 borderRadius: 14,
                 padding: 18,
-                background: activePlan === "basic" ? colors.accentSoft : colors.outputBg,
+                background: plan === "basic" ? colors.accentSoft : colors.outputBg,
               }}
             >
               <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 6 }}>Basic</div>
@@ -674,7 +684,7 @@ Start with electrical and fluid checks before replacing parts. Confirm whether t
                 • Company Settings / Saved Defaults
               </div>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <button onClick={() => setActivePlan("basic")} style={secondaryBtn(colors)}>
+                <button onClick={() => setPlan("basic")} style={secondaryBtn(colors)}>
                   Use Basic View
                 </button>
                 <button
@@ -688,10 +698,10 @@ Start with electrical and fluid checks before replacing parts. Confirm whether t
 
             <div
               style={{
-                border: `1px solid ${activePlan === "pro" ? colors.accent : colors.border}`,
+                border: `1px solid ${plan === "pro" ? colors.accent : colors.border}`,
                 borderRadius: 14,
                 padding: 18,
-                background: activePlan === "pro" ? colors.accentSoft : colors.outputBg,
+                background: plan === "pro" ? colors.accentSoft : colors.outputBg,
               }}
             >
               <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 6 }}>Pro</div>
@@ -707,7 +717,7 @@ Start with electrical and fluid checks before replacing parts. Confirm whether t
                 • Future multilingual AI features
               </div>
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <button onClick={() => setActivePlan("pro")} style={secondaryBtn(colors)}>
+                <button onClick={() => setPlan("pro")} style={secondaryBtn(colors)}>
                   Use Pro View
                 </button>
                 <button
@@ -724,7 +734,7 @@ Start with electrical and fluid checks before replacing parts. Confirm whether t
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "280px minmax(0, 1fr) 430px",
+            gridTemplateColumns: "1fr",
             gap: 20,
           }}
         >
@@ -735,33 +745,52 @@ Start with electrical and fluid checks before replacing parts. Confirm whether t
                 border: `1px solid ${colors.border}`,
                 borderRadius: 16,
                 padding: 16,
+                marginBottom: 20,
               }}
             >
               <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>Tools</div>
 
-              <button style={toolBtnStyle("dashboard")} onClick={() => setActiveTool("dashboard")}>
+              <button
+                style={toolBtnStyle(tool === "dashboard")}
+                onClick={() => setTool("dashboard")}
+              >
                 Dashboard
               </button>
-              <button style={toolBtnStyle("settings")} onClick={() => setActiveTool("settings")}>
+              <button
+                style={toolBtnStyle(tool === "settings")}
+                onClick={() => setTool("settings")}
+              >
                 Company Settings
               </button>
-              <button style={toolBtnStyle("estimate")} onClick={() => setActiveTool("estimate")}>
+              <button
+                style={toolBtnStyle(tool === "estimate")}
+                onClick={() => setTool("estimate")}
+              >
                 Estimate Generator
               </button>
-              <button style={toolBtnStyle("scope")} onClick={() => setActiveTool("scope")}>
+              <button
+                style={toolBtnStyle(tool === "scope")}
+                onClick={() => setTool("scope")}
+              >
                 Scope of Work Writer
               </button>
-              <button style={toolBtnStyle("invoice")} onClick={() => setActiveTool("invoice")}>
+              <button
+                style={toolBtnStyle(tool === "invoice")}
+                onClick={() => setTool("invoice")}
+              >
                 Invoice / Quote Builder
               </button>
-              <button style={toolBtnStyle("contract")} onClick={() => setActiveTool("contract")}>
+              <button
+                style={toolBtnStyle(tool === "contract")}
+                onClick={() => setTool("contract")}
+              >
                 Contract Builder
               </button>
               <button
-                style={toolBtnStyle("troubleshoot")}
+                style={toolBtnStyle(tool === "troubleshoot", plan !== "pro")}
                 onClick={() => {
-                  setActiveTool("troubleshoot");
-                  if (activePlan !== "pro") {
+                  setTool("troubleshoot");
+                  if (plan !== "pro") {
                     setOutput(
                       "Troubleshooting Assistant is a Pro feature. Use the Pro plan card above to upgrade."
                     );
@@ -783,15 +812,15 @@ Start with electrical and fluid checks before replacing parts. Confirm whether t
                   lineHeight: 1.5,
                 }}
               >
-                Current view: <strong>{activePlan === "pro" ? "Pro" : "Basic"}</strong>
+                Current view: <strong>{plan === "pro" ? "Pro" : "Basic"}</strong>
                 <br />
-                Saved company defaults stay in this browser so you do not have to re-enter rates every time.
+                Settings save in this browser so you do not have to re-enter your rates every time.
               </div>
             </div>
           </div>
 
           <div>
-            {activeTool === "dashboard" && (
+            {tool === "dashboard" && (
               <Card title="Dashboard" colors={colors}>
                 <div
                   style={{
@@ -800,7 +829,7 @@ Start with electrical and fluid checks before replacing parts. Confirm whether t
                     gap: 12,
                   }}
                 >
-                  <Metric label="Plan" value={activePlan === "pro" ? "Pro" : "Basic"} colors={colors} />
+                  <Metric label="Plan" value={plan === "pro" ? "Pro" : "Basic"} colors={colors} />
                   <Metric label="Labor Rate" value={currency(settings.laborRate)} colors={colors} />
                   <Metric
                     label="Equipment Rate"
@@ -815,52 +844,46 @@ Start with electrical and fluid checks before replacing parts. Confirm whether t
                 </div>
 
                 <div style={{ marginTop: 18, color: colors.muted, lineHeight: 1.7 }}>
-                  Tradesman AI gives you one place to handle business paperwork and job
-                  documentation for your trade business. Use Company Settings to set your rates,
-                  then generate estimates, scopes, invoices, contracts, and Pro troubleshooting
-                  reports from the tools on the left.
+                  Use Company Settings to set your rates, then generate estimates, scopes,
+                  invoices, contracts, and Pro troubleshooting reports from the tools above.
                 </div>
               </Card>
             )}
 
-            {activeTool === "settings" && (
+            {tool === "settings" && (
               <Card title="Company Settings" colors={colors}>
                 <Grid>
                   <Field
                     label="Company Name"
                     value={settings.companyName}
-                    onChange={(v: string) => setSettings({ ...settings, companyName: v })}
+                    onChange={(v) => setSettings({ ...settings, companyName: v })}
                     colors={colors}
                   />
                   <Field
                     label="Location"
                     value={settings.location}
-                    onChange={(v: string) => setSettings({ ...settings, location: v })}
+                    onChange={(v) => setSettings({ ...settings, location: v })}
                     colors={colors}
                   />
                   <Field
                     label="Labor Rate / Hr"
                     type="number"
                     value={String(settings.laborRate)}
-                    onChange={(v: string) =>
-                      setSettings({ ...settings, laborRate: Number(v) || 0 })
-                    }
+                    onChange={(v) => setSettings({ ...settings, laborRate: Number(v) || 0 })}
                     colors={colors}
                   />
                   <Field
                     label="Equipment Rate / Hr"
                     type="number"
                     value={String(settings.equipmentRate)}
-                    onChange={(v: string) =>
-                      setSettings({ ...settings, equipmentRate: Number(v) || 0 })
-                    }
+                    onChange={(v) => setSettings({ ...settings, equipmentRate: Number(v) || 0 })}
                     colors={colors}
                   />
                   <Field
                     label="Material Price / Ton"
                     type="number"
                     value={String(settings.materialPricePerTon)}
-                    onChange={(v: string) =>
+                    onChange={(v) =>
                       setSettings({ ...settings, materialPricePerTon: Number(v) || 0 })
                     }
                     colors={colors}
@@ -869,25 +892,21 @@ Start with electrical and fluid checks before replacing parts. Confirm whether t
                     label="Markup %"
                     type="number"
                     value={String(settings.markupPercent)}
-                    onChange={(v: string) =>
-                      setSettings({ ...settings, markupPercent: Number(v) || 0 })
-                    }
+                    onChange={(v) => setSettings({ ...settings, markupPercent: Number(v) || 0 })}
                     colors={colors}
                   />
                   <Field
                     label="Tax %"
                     type="number"
                     value={String(settings.taxPercent)}
-                    onChange={(v: string) =>
-                      setSettings({ ...settings, taxPercent: Number(v) || 0 })
-                    }
+                    onChange={(v) => setSettings({ ...settings, taxPercent: Number(v) || 0 })}
                     colors={colors}
                   />
                   <Field
                     label="Mobilization Default"
                     type="number"
                     value={String(settings.mobilizationDefault)}
-                    onChange={(v: string) =>
+                    onChange={(v) =>
                       setSettings({ ...settings, mobilizationDefault: Number(v) || 0 })
                     }
                     colors={colors}
@@ -896,7 +915,7 @@ Start with electrical and fluid checks before replacing parts. Confirm whether t
                     label="Dump Fees Default"
                     type="number"
                     value={String(settings.dumpFeesDefault)}
-                    onChange={(v: string) =>
+                    onChange={(v) =>
                       setSettings({ ...settings, dumpFeesDefault: Number(v) || 0 })
                     }
                     colors={colors}
@@ -904,69 +923,59 @@ Start with electrical and fluid checks before replacing parts. Confirm whether t
                   <Field
                     label="Currency"
                     value={settings.currency}
-                    onChange={(v: string) =>
-                      setSettings({ ...settings, currency: v.toUpperCase() })
-                    }
+                    onChange={(v) => setSettings({ ...settings, currency: v.toUpperCase() })}
                     colors={colors}
                   />
                   <Field
                     label="Dashboard Language"
                     value={settings.dashboardLanguage}
-                    onChange={(v: string) =>
-                      setSettings({ ...settings, dashboardLanguage: v })
-                    }
+                    onChange={(v) => setSettings({ ...settings, dashboardLanguage: v })}
                     colors={colors}
                   />
                   <Field
                     label="Document Language"
                     value={settings.documentLanguage}
-                    onChange={(v: string) =>
-                      setSettings({ ...settings, documentLanguage: v })
-                    }
+                    onChange={(v) => setSettings({ ...settings, documentLanguage: v })}
                     colors={colors}
                   />
                 </Grid>
               </Card>
             )}
 
-            {activeTool === "estimate" && (
+            {tool === "estimate" && (
               <Card title="Estimate Generator" colors={colors}>
                 <Grid>
                   <Field
                     label="Job Type"
                     value={estimate.jobType}
-                    onChange={(v: string) => setEstimate({ ...estimate, jobType: v })}
+                    onChange={(v) => setEstimate({ ...estimate, jobType: v })}
                     colors={colors}
                   />
                   <Field
                     label="Material"
                     value={estimate.material}
-                    onChange={(v: string) => setEstimate({ ...estimate, material: v })}
+                    onChange={(v) => setEstimate({ ...estimate, material: v })}
                     colors={colors}
                   />
                   <Field
                     label="Length (ft)"
                     type="number"
                     value={String(estimate.length)}
-                    onChange={(v: string) =>
-                      setEstimate({ ...estimate, length: Number(v) || 0 })
-                    }
+                    onChange={(v) => setEstimate({ ...estimate, length: Number(v) || 0 })}
                     colors={colors}
                   />
                   <Field
                     label="Width (ft)"
                     type="number"
                     value={String(estimate.width)}
-                    onChange={(v: string) =>
-                      setEstimate({ ...estimate, width: Number(v) || 0 })
-                    }
+                    onChange={(v) => setEstimate({ ...estimate, width: Number(v) || 0 })}
                     colors={colors}
                   />
                   <Field
                     label="Depth (in)"
                     type="number"
                     value={String(estimate.depthInches)}
-                    onChange={(v: string) =>
+                    onChange={(v) =>
                       setEstimate({ ...estimate, depthInches: Number(v) || 0 })
                     }
                     colors={colors}
@@ -975,8 +984,11 @@ Start with electrical and fluid checks before replacing parts. Confirm whether t
                     label="Material Price / Ton"
                     type="number"
                     value={String(estimate.materialPricePerTon)}
-                    onChange={(v: string) =>
-                      setEstimate({ ...estimate, materialPricePerTon: Number(v) || 0 })
+                    onChange={(v) =>
+                      setEstimate({
+                        ...estimate,
+                        materialPricePerTon: Number(v) || 0,
+                      })
                     }
                     colors={colors}
                   />
@@ -984,7 +996,7 @@ Start with electrical and fluid checks before replacing parts. Confirm whether t
                     label="Labor Hours"
                     type="number"
                     value={String(estimate.laborHours)}
-                    onChange={(v: string) =>
+                    onChange={(v) =>
                       setEstimate({ ...estimate, laborHours: Number(v) || 0 })
                     }
                     colors={colors}
@@ -993,16 +1005,14 @@ Start with electrical and fluid checks before replacing parts. Confirm whether t
                     label="Labor Rate / Hr"
                     type="number"
                     value={String(estimate.laborRate)}
-                    onChange={(v: string) =>
-                      setEstimate({ ...estimate, laborRate: Number(v) || 0 })
-                    }
+                    onChange={(v) => setEstimate({ ...estimate, laborRate: Number(v) || 0 })}
                     colors={colors}
                   />
                   <Field
                     label="Equipment Hours"
                     type="number"
                     value={String(estimate.equipmentHours)}
-                    onChange={(v: string) =>
+                    onChange={(v) =>
                       setEstimate({ ...estimate, equipmentHours: Number(v) || 0 })
                     }
                     colors={colors}
@@ -1011,7 +1021,7 @@ Start with electrical and fluid checks before replacing parts. Confirm whether t
                     label="Equipment Rate / Hr"
                     type="number"
                     value={String(estimate.equipmentRate)}
-                    onChange={(v: string) =>
+                    onChange={(v) =>
                       setEstimate({ ...estimate, equipmentRate: Number(v) || 0 })
                     }
                     colors={colors}
@@ -1020,7 +1030,7 @@ Start with electrical and fluid checks before replacing parts. Confirm whether t
                     label="Mobilization"
                     type="number"
                     value={String(estimate.mobilization)}
-                    onChange={(v: string) =>
+                    onChange={(v) =>
                       setEstimate({ ...estimate, mobilization: Number(v) || 0 })
                     }
                     colors={colors}
@@ -1029,16 +1039,14 @@ Start with electrical and fluid checks before replacing parts. Confirm whether t
                     label="Dump Fees"
                     type="number"
                     value={String(estimate.dumpFees)}
-                    onChange={(v: string) =>
-                      setEstimate({ ...estimate, dumpFees: Number(v) || 0 })
-                    }
+                    onChange={(v) => setEstimate({ ...estimate, dumpFees: Number(v) || 0 })}
                     colors={colors}
                   />
                   <Field
                     label="Markup %"
                     type="number"
                     value={String(estimate.markupPercent)}
-                    onChange={(v: string) =>
+                    onChange={(v) =>
                       setEstimate({ ...estimate, markupPercent: Number(v) || 0 })
                     }
                     colors={colors}
@@ -1048,7 +1056,7 @@ Start with electrical and fluid checks before replacing parts. Confirm whether t
                 <Area
                   label="Notes"
                   value={estimate.notes}
-                  onChange={(v: string) => setEstimate({ ...estimate, notes: v })}
+                  onChange={(v) => setEstimate({ ...estimate, notes: v })}
                   colors={colors}
                 />
 
@@ -1060,7 +1068,7 @@ Start with electrical and fluid checks before replacing parts. Confirm whether t
                     borderRadius: 12,
                     padding: 14,
                     display: "grid",
-                    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
                     gap: 10,
                   }}
                 >
@@ -1072,81 +1080,86 @@ Start with electrical and fluid checks before replacing parts. Confirm whether t
               </Card>
             )}
 
-            {activeTool === "scope" && (
+            {tool === "scope" && (
               <Card title="Scope of Work Writer" colors={colors}>
                 <Field
                   label="Project Name"
                   value={scope.projectName}
-                  onChange={(v: string) => setScope({ ...scope, projectName: v })}
+                  onChange={(v) => setScope({ ...scope, projectName: v })}
                   colors={colors}
                 />
                 <Area
                   label="Job Description"
                   value={scope.jobDescription}
-                  onChange={(v: string) => setScope({ ...scope, jobDescription: v })}
+                  onChange={(v) => setScope({ ...scope, jobDescription: v })}
                   colors={colors}
                 />
                 <Area
                   label="Materials / Inclusions"
                   value={scope.materials}
-                  onChange={(v: string) => setScope({ ...scope, materials: v })}
+                  onChange={(v) => setScope({ ...scope, materials: v })}
                   colors={colors}
                 />
                 <Area
                   label="Customer Notes / Site Conditions"
                   value={scope.customerNotes}
-                  onChange={(v: string) => setScope({ ...scope, customerNotes: v })}
+                  onChange={(v) => setScope({ ...scope, customerNotes: v })}
                   colors={colors}
                 />
                 <Area
                   label="Timeline"
                   value={scope.timeline}
-                  onChange={(v: string) => setScope({ ...scope, timeline: v })}
+                  onChange={(v) => setScope({ ...scope, timeline: v })}
                   colors={colors}
                 />
                 <Area
                   label="Exclusions"
                   value={scope.exclusions}
-                  onChange={(v: string) => setScope({ ...scope, exclusions: v })}
+                  onChange={(v) => setScope({ ...scope, exclusions: v })}
                   colors={colors}
                 />
               </Card>
             )}
 
-            {activeTool === "invoice" && (
+            {tool === "invoice" && (
               <Card title="Invoice / Quote Builder" colors={colors}>
                 <Grid>
                   <Field
                     label="Customer Name"
                     value={invoice.customerName}
-                    onChange={(v: string) => setInvoice({ ...invoice, customerName: v })}
+                    onChange={(v) => setInvoice({ ...invoice, customerName: v })}
                     colors={colors}
                   />
                   <Field
                     label="Job Name"
                     value={invoice.jobName}
-                    onChange={(v: string) => setInvoice({ ...invoice, jobName: v })}
+                    onChange={(v) => setInvoice({ ...invoice, jobName: v })}
                     colors={colors}
                   />
                   <Field
                     label="Invoice Number"
                     value={invoice.invoiceNumber}
-                    onChange={(v: string) => setInvoice({ ...invoice, invoiceNumber: v })}
+                    onChange={(v) => setInvoice({ ...invoice, invoiceNumber: v })}
                     colors={colors}
                   />
                   <Field
                     label="Tax %"
                     type="number"
                     value={String(invoice.taxPercent)}
-                    onChange={(v: string) =>
-                      setInvoice({ ...invoice, taxPercent: Number(v) || 0 })
-                    }
+                    onChange={(v) => setInvoice({ ...invoice, taxPercent: Number(v) || 0 })}
                     colors={colors}
                   />
                 </Grid>
 
                 <div style={{ marginTop: 14 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: colors.muted, marginBottom: 8 }}>
+                  <div
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: colors.muted,
+                      marginBottom: 8,
+                    }}
+                  >
                     Line Items
                   </div>
 
@@ -1197,7 +1210,9 @@ Start with electrical and fluid checks before replacing parts. Confirm whether t
                           const items = invoice.items.filter((_, i) => i !== index);
                           setInvoice({
                             ...invoice,
-                            items: items.length ? items : [{ description: "", quantity: 1, unitPrice: 0 }],
+                            items: items.length
+                              ? items
+                              : [{ description: "", quantity: 1, unitPrice: 0 }],
                           });
                         }}
                         style={dangerBtn(colors)}
@@ -1223,43 +1238,43 @@ Start with electrical and fluid checks before replacing parts. Confirm whether t
                 <Area
                   label="Notes"
                   value={invoice.notes}
-                  onChange={(v: string) => setInvoice({ ...invoice, notes: v })}
+                  onChange={(v) => setInvoice({ ...invoice, notes: v })}
                   colors={colors}
                 />
               </Card>
             )}
 
-            {activeTool === "contract" && (
+            {tool === "contract" && (
               <Card title="Contract Builder" colors={colors}>
                 <Grid>
                   <Field
                     label="Contract Title"
                     value={contract.contractTitle}
-                    onChange={(v: string) => setContract({ ...contract, contractTitle: v })}
+                    onChange={(v) => setContract({ ...contract, contractTitle: v })}
                     colors={colors}
                   />
                   <Field
                     label="Client Name"
                     value={contract.clientName}
-                    onChange={(v: string) => setContract({ ...contract, clientName: v })}
+                    onChange={(v) => setContract({ ...contract, clientName: v })}
                     colors={colors}
                   />
                   <Field
                     label="Project Name"
                     value={contract.projectName}
-                    onChange={(v: string) => setContract({ ...contract, projectName: v })}
+                    onChange={(v) => setContract({ ...contract, projectName: v })}
                     colors={colors}
                   />
                   <Field
                     label="Contract Price"
                     value={contract.contractPrice}
-                    onChange={(v: string) => setContract({ ...contract, contractPrice: v })}
+                    onChange={(v) => setContract({ ...contract, contractPrice: v })}
                     colors={colors}
                   />
                   <Field
                     label="Start Date"
                     value={contract.startDate}
-                    onChange={(v: string) => setContract({ ...contract, startDate: v })}
+                    onChange={(v) => setContract({ ...contract, startDate: v })}
                     colors={colors}
                   />
                 </Grid>
@@ -1267,92 +1282,89 @@ Start with electrical and fluid checks before replacing parts. Confirm whether t
                 <Area
                   label="Scope of Work"
                   value={contract.scopeOfWork}
-                  onChange={(v: string) => setContract({ ...contract, scopeOfWork: v })}
+                  onChange={(v) => setContract({ ...contract, scopeOfWork: v })}
                   colors={colors}
                 />
                 <Area
                   label="Completion Terms"
                   value={contract.completionTerms}
-                  onChange={(v: string) => setContract({ ...contract, completionTerms: v })}
+                  onChange={(v) => setContract({ ...contract, completionTerms: v })}
                   colors={colors}
                 />
                 <Area
                   label="Payment Terms"
                   value={contract.paymentTerms}
-                  onChange={(v: string) => setContract({ ...contract, paymentTerms: v })}
+                  onChange={(v) => setContract({ ...contract, paymentTerms: v })}
                   colors={colors}
                 />
                 <Area
                   label="Exclusions"
                   value={contract.exclusions}
-                  onChange={(v: string) => setContract({ ...contract, exclusions: v })}
+                  onChange={(v) => setContract({ ...contract, exclusions: v })}
                   colors={colors}
                 />
                 <Area
                   label="Warranty / Limitation"
                   value={contract.warranty}
-                  onChange={(v: string) => setContract({ ...contract, warranty: v })}
+                  onChange={(v) => setContract({ ...contract, warranty: v })}
                   colors={colors}
                 />
                 <Area
                   label="Signatures"
                   value={contract.signatures}
-                  onChange={(v: string) => setContract({ ...contract, signatures: v })}
+                  onChange={(v) => setContract({ ...contract, signatures: v })}
                   colors={colors}
                 />
               </Card>
             )}
 
-            {activeTool === "troubleshoot" && (
+            {tool === "troubleshoot" && (
               <Card title="Troubleshooting Assistant (Pro)" colors={colors}>
                 <Field
                   label="Machine / Vehicle"
                   value={trouble.machine}
-                  onChange={(v: string) => setTrouble({ ...trouble, machine: v })}
+                  onChange={(v) => setTrouble({ ...trouble, machine: v })}
                   colors={colors}
                 />
                 <Area
                   label="Main Symptom"
                   value={trouble.symptom}
-                  onChange={(v: string) => setTrouble({ ...trouble, symptom: v })}
+                  onChange={(v) => setTrouble({ ...trouble, symptom: v })}
                   colors={colors}
                 />
                 <Area
                   label="Recent Work / Relevant History"
                   value={trouble.recentWork}
-                  onChange={(v: string) => setTrouble({ ...trouble, recentWork: v })}
+                  onChange={(v) => setTrouble({ ...trouble, recentWork: v })}
                   colors={colors}
                 />
                 <Field
                   label="Severity"
                   value={trouble.severity}
-                  onChange={(v: string) => setTrouble({ ...trouble, severity: v })}
+                  onChange={(v) => setTrouble({ ...trouble, severity: v })}
                   colors={colors}
                 />
               </Card>
             )}
 
-            {activeTool !== "dashboard" && (
-              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            {tool !== "dashboard" && (
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
                 <button onClick={generateFromActiveTool} style={primaryBtn(colors)}>
-                  {activeTool === "settings" ? "Save Settings" : "Generate Output"}
+                  {tool === "settings" ? "Save Settings" : "Generate Output"}
                 </button>
                 <button onClick={copyOutput} style={secondaryBtn(colors)}>
                   Copy Output
                 </button>
               </div>
             )}
-          </div>
 
-          <div>
             <div
               style={{
                 background: colors.panelBg,
                 border: `1px solid ${colors.border}`,
                 borderRadius: 16,
                 padding: 18,
-                position: "sticky",
-                top: 20,
+                position: "relative",
               }}
             >
               <div
@@ -1375,7 +1387,7 @@ Start with electrical and fluid checks before replacing parts. Confirm whether t
                   background: colors.outputBg,
                   border: `1px solid ${colors.border}`,
                   borderRadius: 12,
-                  minHeight: 620,
+                  minHeight: 360,
                   padding: 16,
                   whiteSpace: "pre-wrap",
                   lineHeight: 1.55,
@@ -1423,7 +1435,7 @@ function Grid({ children }: { children: React.ReactNode }) {
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+        gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
         gap: 14,
       }}
     >
