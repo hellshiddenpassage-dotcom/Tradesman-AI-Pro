@@ -3,6 +3,7 @@ import { scoreLead, scoreBucket } from "./leadEngine";
 import { generateMarketing } from "./marketingEngine";
 
 type Language = "English" | "Spanish" | "French" | "German" | "Portuguese";
+type PlanTier = "basic" | "pro" | "team";
 
 type Customer = {
   name: string;
@@ -40,6 +41,7 @@ type EstimateData = {
 
 const BASIC_STRIPE_LINK = "https://buy.stripe.com/eVqdR26372Cb7BW8Y5d7q03";
 const PRO_STRIPE_LINK = "https://buy.stripe.com/dRmfZa3UZa4D7BWgqxd7q04";
+const TEAM_STRIPE_LINK = "https://buy.stripe.com/7sYdR277b3Gf8G0fmtd7q05";
 
 const SUPABASE_URL = "https://ljizlaabarhyzocfcsba.supabase.co";
 const SUPABASE_ANON_KEY =
@@ -190,6 +192,16 @@ function money(value: number): string {
   }).format(value);
 }
 
+function getPlanRank(plan: PlanTier): number {
+  if (plan === "team") return 3;
+  if (plan === "pro") return 2;
+  return 1;
+}
+
+function hasAccess(current: PlanTier, needed: PlanTier): boolean {
+  return getPlanRank(current) >= getPlanRank(needed);
+}
+
 function detectJobType(description: string): string {
   const text = description.toLowerCase();
   if (text.includes("fence")) return "Fence Work";
@@ -213,11 +225,9 @@ function detectJobType(description: string): string {
 function parseDimensionMultiplier(description: string): number {
   const match = description.match(/(\d+)\s*x\s*(\d+)/i);
   if (!match) return 1;
-
   const a = Number(match[1]);
   const b = Number(match[2]);
   if (!Number.isFinite(a) || !Number.isFinite(b)) return 1;
-
   const area = a * b;
   if (area <= 400) return 1;
   if (area <= 1200) return 1.35;
@@ -513,284 +523,21 @@ function suggestedReply(lead: LeadRow): string {
   return `Hi ${lead.contact_name || "there"} — thanks for reaching out about your ${jobType.toLowerCase()} project in ${lead.city || "your area"}. Based on what you sent, this looks like a rough range of ${range}. If you'd like, I can take a closer look and get you a firm quote.`;
 }
 
-function PricingCard({
-  title,
-  price,
-  bullets,
-  buttonText,
-  onClick,
-  highlighted,
-}: {
-  title: string;
-  price: string;
-  bullets: string[];
-  buttonText: string;
-  onClick: () => void;
-  highlighted: boolean;
-}) {
-  return (
-    <div
-      style={{
-        border: highlighted ? "2px solid #7c3aed" : "1px solid #e5e7eb",
-        borderRadius: 12,
-        padding: 16,
-        background: highlighted ? "#faf5ff" : "white",
-      }}
-    >
-      <div style={{ fontWeight: 800, fontSize: 18 }}>{title}</div>
-      <div style={{ fontWeight: 900, fontSize: 28, margin: "8px 0 12px" }}>
-        {price}
-      </div>
-      <ul style={{ paddingLeft: 18, marginTop: 0, color: "#374151" }}>
-        {bullets.map((b) => (
-          <li key={b} style={{ marginBottom: 6 }}>
-            {b}
-          </li>
-        ))}
-      </ul>
-      <button
-        onClick={onClick}
-        style={buttonStyle(highlighted ? "primary" : "secondary")}
-      >
-        {buttonText}
-      </button>
-    </div>
-  );
-}
+function launchChecklist(): string {
+  return `SOFT LAUNCH CHECKLIST
 
-function buttonStyle(
-  variant: "primary" | "secondary" = "primary"
-): React.CSSProperties {
-  return {
-    padding: "12px 16px",
-    borderRadius: 10,
-    border: variant === "primary" ? "none" : "1px solid #d1d5db",
-    background: variant === "primary" ? "#7c3aed" : "white",
-    color: variant === "primary" ? "white" : "#111827",
-    fontWeight: 700,
-    cursor: "pointer",
-  };
-}
+1. Replace TEAM_STRIPE_LINK in App.tsx with your real Stripe checkout link
+2. Take 3 screenshots:
+   - Lead Inbox
+   - AI Estimate Engine
+   - AI Marketing Generator
+3. Post 1 contractor-focused offer today
+4. DM 20 local contractors with a screenshot and short pitch
+5. Run a small local Facebook test ad with a $10-$20 daily budget
+6. Collect the first 3-5 users before making major changes
 
-function inputBox(): React.CSSProperties {
-  return {
-    width: "100%",
-    padding: 12,
-    borderRadius: 10,
-    border: "1px solid #d1d5db",
-    boxSizing: "border-box",
-  };
-}
-
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div
-      style={{
-        border: "1px solid #e5e7eb",
-        borderRadius: 12,
-        padding: 14,
-        background: "#f8fafc",
-      }}
-    >
-      <div style={{ color: "#6b7280", fontSize: 12 }}>{label}</div>
-      <div style={{ fontWeight: 900, fontSize: 24 }}>{value}</div>
-    </div>
-  );
-}
-
-function LeadCard({
-  lead,
-  onStatus,
-  onDelete,
-  onLoadReply,
-}: {
-  lead: LeadRow;
-  onStatus: (id: string, status: string) => void;
-  onDelete: (id: string) => void;
-  onLoadReply: (text: string) => void;
-}) {
-  const combined = `${lead.title}\n${lead.description}\n${lead.city}\n${lead.budget}\n${lead.contact_name}\n${lead.contact_info}`;
-  const scored = scoreLead(combined);
-  const bucket = scoreBucket(Number(lead.score || 0));
-  const reply = suggestedReply(lead);
-  const range = quoteRangeFromLead(
-    `${lead.title}\n${lead.description}`,
-    Number(lead.score || 0)
-  );
-
-  return (
-    <div
-      style={{
-        border: "1px solid #e5e7eb",
-        borderRadius: 12,
-        padding: 14,
-        background: "white",
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-        <div>
-          <div style={{ fontWeight: 800 }}>{lead.title || "Untitled Lead"}</div>
-          <div style={{ color: "#6b7280", fontSize: 13 }}>
-            {lead.city || "No city"} • {lead.source || "manual"} • {lead.created_at}
-          </div>
-        </div>
-        <div
-          style={{
-            padding: "6px 10px",
-            borderRadius: 999,
-            background:
-              bucket === "Hot"
-                ? "#fee2e2"
-                : bucket === "Warm"
-                ? "#fef3c7"
-                : "#e5e7eb",
-            fontWeight: 800,
-            whiteSpace: "nowrap",
-          }}
-        >
-          {bucket} • {lead.score}
-        </div>
-      </div>
-
-      <div style={{ marginTop: 10, whiteSpace: "pre-wrap" }}>
-        {lead.description || "No description"}
-      </div>
-
-      <div style={{ marginTop: 10, color: "#374151", lineHeight: 1.7 }}>
-        <div>Contact: {lead.contact_name || "-"} / {lead.contact_info || "-"}</div>
-        <div>Budget: {lead.budget || "-"}</div>
-        <div>Status: <strong>{lead.status}</strong></div>
-        <div>
-          Detected Job:{" "}
-          <strong>{detectJobType(`${lead.title} ${lead.description}`)}</strong>
-        </div>
-        <div>Suggested Quote Range: <strong>{range}</strong></div>
-      </div>
-
-      <div
-        style={{
-          marginTop: 10,
-          padding: 12,
-          borderRadius: 10,
-          background: "#f8fafc",
-          border: "1px solid #e5e7eb",
-        }}
-      >
-        <div style={{ fontWeight: 700, marginBottom: 6 }}>Score Reasons</div>
-        <div style={{ fontSize: 14, color: "#374151" }}>
-          {scored.reasons.length
-            ? scored.reasons.join(" • ")
-            : "No strong signals found"}
-        </div>
-      </div>
-
-      <div
-        style={{
-          marginTop: 10,
-          padding: 12,
-          borderRadius: 10,
-          background: "#f8fafc",
-          border: "1px solid #e5e7eb",
-        }}
-      >
-        <div style={{ fontWeight: 700, marginBottom: 6 }}>Suggested Reply</div>
-        <div style={{ whiteSpace: "pre-wrap", fontSize: 14 }}>{reply}</div>
-        <div style={{ marginTop: 10 }}>
-          <button onClick={() => onLoadReply(reply)} style={buttonStyle("secondary")}>
-            Load Reply Into Output
-          </button>
-        </div>
-      </div>
-
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
-        <button
-          onClick={() => onStatus(lead.id, "contacted")}
-          style={buttonStyle("secondary")}
-        >
-          Mark Contacted
-        </button>
-        <button
-          onClick={() => onStatus(lead.id, "quoted")}
-          style={buttonStyle("secondary")}
-        >
-          Mark Quoted
-        </button>
-        <button
-          onClick={() => onStatus(lead.id, "won")}
-          style={buttonStyle("secondary")}
-        >
-          Mark Won
-        </button>
-        <button
-          onClick={() => onDelete(lead.id)}
-          style={buttonStyle("secondary")}
-        >
-          Delete
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function PipelineColumn({
-  title,
-  bg,
-  leads,
-  onStatus,
-  onDelete,
-  onLoadReply,
-}: {
-  title: string;
-  bg: string;
-  leads: LeadRow[];
-  onStatus: (id: string, status: string) => void;
-  onDelete: (id: string) => void;
-  onLoadReply: (text: string) => void;
-}) {
-  return (
-    <div
-      style={{
-        background: bg,
-        border: "1px solid #e5e7eb",
-        borderRadius: 14,
-        padding: 12,
-        minHeight: 300,
-      }}
-    >
-      <div style={{ fontWeight: 900, marginBottom: 12 }}>{title}</div>
-      <div style={{ display: "grid", gap: 12 }}>
-        {leads.length === 0 ? (
-          <div style={{ color: "#6b7280" }}>No leads in this bucket.</div>
-        ) : (
-          leads.map((lead) => (
-            <LeadCard
-              key={lead.id}
-              lead={lead}
-              onStatus={onStatus}
-              onDelete={onDelete}
-              onLoadReply={onLoadReply}
-            />
-          ))
-        )}
-      </div>
-    </div>
-  );
-}
-
-function LandingStat({ title, text }: { title: string; text: string }) {
-  return (
-    <div
-      style={{
-        background: "#111827",
-        border: "1px solid #334155",
-        borderRadius: 16,
-        padding: 16,
-      }}
-    >
-      <div style={{ fontWeight: 900, marginBottom: 8 }}>{title}</div>
-      <div style={{ color: "#a8b3c7", lineHeight: 1.6 }}>{text}</div>
-    </div>
-  );
+SIMPLE PITCH
+"Tradesman AI helps contractors score leads, build estimates, reply faster, and generate ads in minutes."`;
 }
 
 export default function App() {
@@ -800,6 +547,8 @@ export default function App() {
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authMessage, setAuthMessage] = useState("");
+
+  const [plan, setPlan] = useState<PlanTier>("basic");
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerName, setCustomerName] = useState("");
@@ -931,6 +680,11 @@ export default function App() {
       return;
     }
 
+    if (!hasAccess(plan, "pro")) {
+      alert("Lead Inbox is a Pro or Team feature.");
+      return;
+    }
+
     const combined = `${leadTitle}\n${leadDescription}\n${leadCity}\n${leadBudget}\n${leadContactName}\n${leadContactInfo}`;
     const scored = scoreLead(combined);
 
@@ -987,6 +741,11 @@ export default function App() {
   }
 
   function buildMarketing() {
+    if (!hasAccess(plan, "pro")) {
+      alert("AI Marketing Generator is a Pro or Team feature.");
+      return;
+    }
+
     const result = generateMarketing(marketingJob, marketingCity);
 
     const text = `MARKETING CONTENT
@@ -1100,7 +859,6 @@ ${result.offer}
   const handleSelection = () => {
     const textarea = outputRef.current;
     if (!textarea) return;
-
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
     const text = textarea.value.substring(start, end);
@@ -1171,7 +929,7 @@ ${result.offer}
                   marginBottom: 18,
                 }}
               >
-                AI Business Software for Contractors
+                Launch-Ready Contractor SaaS
               </div>
 
               <div
@@ -1182,7 +940,7 @@ ${result.offer}
                   marginBottom: 16,
                 }}
               >
-                Quote jobs faster, score leads, and create ads with AI.
+                Score leads, write estimates, and generate ads in minutes.
               </div>
 
               <div
@@ -1193,8 +951,8 @@ ${result.offer}
                   marginBottom: 24,
                 }}
               >
-                Tradesman AI helps contractors manage leads, build estimates,
-                translate messages, and generate marketing content faster.
+                Tradesman AI helps contractors respond faster, quote jobs faster,
+                and market faster without hiring office staff.
               </div>
 
               <div
@@ -1214,7 +972,7 @@ ${result.offer}
                 />
                 <LandingStat
                   title="Marketing AI"
-                  text="Generate hooks, ads, social posts, and offers in seconds."
+                  text="Generate hooks, ads, posts, and offers in seconds."
                 />
               </div>
             </div>
@@ -1355,7 +1113,7 @@ ${result.offer}
                 <div style={{ color: "#a8b3c7", lineHeight: 1.7 }}>
                   <strong>Basic — $19/mo</strong>
                   <br />
-                  CRM, estimates, translations
+                  Estimates, translations, customer tools
                   <br />
                   <br />
                   <strong>Pro — $49/mo</strong>
@@ -1365,7 +1123,7 @@ ${result.offer}
                   <br />
                   <strong>Team — $99/mo</strong>
                   <br />
-                  Team workflow foundation
+                  Shared workflow and business-scale positioning
                 </div>
               </div>
             </div>
@@ -1398,12 +1156,40 @@ ${result.offer}
         <div>
           <h1 style={{ marginBottom: 8 }}>Tradesman AI</h1>
           <p style={{ color: "#4b5563", marginTop: 0 }}>
-            Signed in as {session.user?.email || "user"}
+            Signed in as {session.user?.email || "user"} • Current plan: {plan}
           </p>
         </div>
         <button onClick={handleSignOut} style={buttonStyle("secondary")}>
           Sign Out
         </button>
+      </div>
+
+      <div
+        style={{
+          border: "1px solid #e5e7eb",
+          borderRadius: 14,
+          padding: 20,
+          marginBottom: 24,
+          background: "#fafafa",
+        }}
+      >
+        <h2 style={{ marginTop: 0 }}>Launch-Ready Offer</h2>
+        <div style={{ lineHeight: 1.8 }}>
+          <div><strong>Headline:</strong> Tradesman AI helps contractors score leads, quote jobs, and market faster.</div>
+          <div><strong>Best entry offer:</strong> 7-day test drive + Basic at $19 / Pro at $49 / Team at $99.</div>
+          <div><strong>Best first niche:</strong> excavation, gravel driveway, skid steer, fencing, and dirt-work contractors.</div>
+        </div>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
+          <button onClick={() => setOutput(launchChecklist())} style={buttonStyle()}>
+            Load Launch Checklist
+          </button>
+          <button
+            onClick={() => window.open(TEAM_STRIPE_LINK, "_blank")}
+            style={buttonStyle("secondary")}
+          >
+            Open Team Checkout
+          </button>
+        </div>
       </div>
 
       <div
@@ -1489,9 +1275,9 @@ ${result.offer}
             padding: 20,
           }}
         >
-          <h2 style={{ marginTop: 0 }}>Pricing</h2>
+          <h2 style={{ marginTop: 0 }}>Plans + Access</h2>
 
-          <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ display: "grid", gap: 12, marginBottom: 16 }}>
             <PricingCard
               title="Basic"
               price="$19/mo"
@@ -1503,7 +1289,7 @@ ${result.offer}
               ]}
               buttonText="Subscribe"
               onClick={() => window.open(BASIC_STRIPE_LINK, "_blank")}
-              highlighted={false}
+              highlighted={plan === "basic"}
             />
             <PricingCard
               title="Pro"
@@ -1516,21 +1302,43 @@ ${result.offer}
               ]}
               buttonText="Upgrade"
               onClick={() => window.open(PRO_STRIPE_LINK, "_blank")}
-              highlighted={true}
+              highlighted={plan === "pro"}
             />
             <PricingCard
               title="Team"
               price="$99/mo"
               bullets={[
                 "Everything in Pro",
-                "Shared lead workflow later",
-                "Team dashboard later",
+                "Team workflow positioning",
+                "Shared-office use case",
                 "Priority support",
               ]}
-              buttonText="Coming Soon"
-              onClick={() => alert("Team plan coming soon")}
-              highlighted={false}
+              buttonText="Get Team"
+              onClick={() => window.open(TEAM_STRIPE_LINK, "_blank")}
+              highlighted={plan === "team"}
             />
+          </div>
+
+          <div
+            style={{
+              border: "1px solid #e5e7eb",
+              borderRadius: 12,
+              padding: 12,
+              background: "#f8fafc",
+            }}
+          >
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>Dev Plan Switcher</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button onClick={() => setPlan("basic")} style={buttonStyle("secondary")}>
+                Set Basic
+              </button>
+              <button onClick={() => setPlan("pro")} style={buttonStyle("secondary")}>
+                Set Pro
+              </button>
+              <button onClick={() => setPlan("team")} style={buttonStyle("secondary")}>
+                Set Team
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1620,7 +1428,9 @@ ${result.offer}
           marginBottom: 24,
         }}
       >
-        <h2 style={{ marginTop: 0 }}>Language + Translate Tools</h2>
+        <h2 style={{ marginTop: 0 }}>
+          Language + Translate Tools {hasAccess(plan, "basic") ? "" : "(Basic+)"}
+        </h2>
 
         <div
           style={{
@@ -1670,7 +1480,7 @@ ${result.offer}
           value={output}
           onChange={(e) => setOutput(e.target.value)}
           onSelect={handleSelection}
-          placeholder="Generated estimate output or AI reply will appear here..."
+          placeholder="Generated estimate output, AI reply, or launch checklist will appear here..."
           style={{
             width: "100%",
             minHeight: 320,
@@ -1728,9 +1538,24 @@ ${result.offer}
           borderRadius: 14,
           padding: 20,
           marginBottom: 24,
+          opacity: hasAccess(plan, "pro") ? 1 : 0.65,
         }}
       >
-        <h2 style={{ marginTop: 0 }}>Lead Inbox</h2>
+        <h2 style={{ marginTop: 0 }}>Lead Inbox (Pro+)</h2>
+
+        {!hasAccess(plan, "pro") && (
+          <div
+            style={{
+              background: "#fff7ed",
+              border: "1px solid #fdba74",
+              borderRadius: 10,
+              padding: 12,
+              marginBottom: 14,
+            }}
+          >
+            Upgrade to Pro or Team to save leads, score them, and use AI reply tools.
+          </div>
+        )}
 
         <div
           style={{
@@ -1931,9 +1756,24 @@ ${result.offer}
           borderRadius: 14,
           padding: 20,
           marginBottom: 24,
+          opacity: hasAccess(plan, "pro") ? 1 : 0.65,
         }}
       >
-        <h2 style={{ marginTop: 0 }}>AI Marketing Generator</h2>
+        <h2 style={{ marginTop: 0 }}>AI Marketing Generator (Pro+)</h2>
+
+        {!hasAccess(plan, "pro") && (
+          <div
+            style={{
+              background: "#fff7ed",
+              border: "1px solid #fdba74",
+              borderRadius: 10,
+              padding: 12,
+              marginBottom: 14,
+            }}
+          >
+            Upgrade to Pro or Team to generate ads, hooks, offers, and social posts.
+          </div>
+        )}
 
         <div
           style={{
@@ -1946,7 +1786,7 @@ ${result.offer}
           <input
             value={marketingJob}
             onChange={(e) => setMarketingJob(e.target.value)}
-            placeholder="Service type (example: driveway grading)"
+            placeholder="Service type (example: gravel driveway)"
             style={inputBox()}
           />
 
