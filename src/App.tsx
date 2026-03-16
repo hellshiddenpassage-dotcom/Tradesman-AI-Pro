@@ -659,7 +659,10 @@ function LeadCard({
         <div>Contact: {lead.contact_name || "-"} / {lead.contact_info || "-"}</div>
         <div>Budget: {lead.budget || "-"}</div>
         <div>Status: <strong>{lead.status}</strong></div>
-        <div>Detected Job: <strong>{detectJobType(`${lead.title} ${lead.description}`)}</strong></div>
+        <div>
+          Detected Job:{" "}
+          <strong>{detectJobType(`${lead.title} ${lead.description}`)}</strong>
+        </div>
         <div>Suggested Quote Range: <strong>{range}</strong></div>
       </div>
 
@@ -674,7 +677,9 @@ function LeadCard({
       >
         <div style={{ fontWeight: 700, marginBottom: 6 }}>Score Reasons</div>
         <div style={{ fontSize: 14, color: "#374151" }}>
-          {scored.reasons.length ? scored.reasons.join(" • ") : "No strong signals found"}
+          {scored.reasons.length
+            ? scored.reasons.join(" • ")
+            : "No strong signals found"}
         </div>
       </div>
 
@@ -697,16 +702,28 @@ function LeadCard({
       </div>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
-        <button onClick={() => onStatus(lead.id, "contacted")} style={buttonStyle("secondary")}>
+        <button
+          onClick={() => onStatus(lead.id, "contacted")}
+          style={buttonStyle("secondary")}
+        >
           Mark Contacted
         </button>
-        <button onClick={() => onStatus(lead.id, "quoted")} style={buttonStyle("secondary")}>
+        <button
+          onClick={() => onStatus(lead.id, "quoted")}
+          style={buttonStyle("secondary")}
+        >
           Mark Quoted
         </button>
-        <button onClick={() => onStatus(lead.id, "won")} style={buttonStyle("secondary")}>
+        <button
+          onClick={() => onStatus(lead.id, "won")}
+          style={buttonStyle("secondary")}
+        >
           Mark Won
         </button>
-        <button onClick={() => onDelete(lead.id)} style={buttonStyle("secondary")}>
+        <button
+          onClick={() => onDelete(lead.id)}
+          style={buttonStyle("secondary")}
+        >
           Delete
         </button>
       </div>
@@ -755,6 +772,22 @@ function PipelineColumn({
           ))
         )}
       </div>
+    </div>
+  );
+}
+
+function LandingStat({ title, text }: { title: string; text: string }) {
+  return (
+    <div
+      style={{
+        background: "#111827",
+        border: "1px solid #334155",
+        borderRadius: 16,
+        padding: 16,
+      }}
+    >
+      <div style={{ fontWeight: 900, marginBottom: 8 }}>{title}</div>
+      <div style={{ color: "#a8b3c7", lineHeight: 1.6 }}>{text}</div>
     </div>
   );
 }
@@ -1599,7 +1632,8 @@ export default function App() {
         </div>
 
         <div style={{ color: "#6b7280", fontSize: 13, marginBottom: 12 }}>
-          Highlight text inside the output box, then click <strong>Translate Selected Text</strong>.
+          Highlight text inside the output box, then click{" "}
+          <strong>Translate Selected Text</strong>.
         </div>
 
         <textarea
@@ -1628,7 +1662,9 @@ export default function App() {
             padding: 14,
           }}
         >
-          <div style={{ fontWeight: 700, marginBottom: 8 }}>Translation Preview</div>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>
+            Translation Preview
+          </div>
           <div
             style={{
               minHeight: 80,
@@ -1641,7 +1677,10 @@ export default function App() {
           </div>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button onClick={replaceAllWithTranslatedPreview} style={buttonStyle()}>
+            <button
+              onClick={replaceAllWithTranslatedPreview}
+              style={buttonStyle()}
+            >
               Replace Output With Preview
             </button>
             <button
@@ -1753,7 +1792,9 @@ export default function App() {
             marginBottom: 16,
           }}
         >
-          <div style={{ fontWeight: 700, marginBottom: 8 }}>Auto Score Preview</div>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>
+            Auto Score Preview
+          </div>
           <div style={{ lineHeight: 1.8 }}>
             <div>
               Score: <strong>{scoredDraftLead.score}</strong>
@@ -1762,16 +1803,23 @@ export default function App() {
               Bucket: <strong>{scoreBucket(scoredDraftLead.score)}</strong>
             </div>
             <div>
-              Job Type: <strong>{detectJobType(`${leadTitle} ${leadDescription}`)}</strong>
+              Job Type:{" "}
+              <strong>{detectJobType(`${leadTitle} ${leadDescription}`)}</strong>
             </div>
             <div>
               Quote Range:{" "}
               <strong>
-                {quoteRangeFromLead(`${leadTitle}\n${leadDescription}`, scoredDraftLead.score)}
+                {quoteRangeFromLead(
+                  `${leadTitle}\n${leadDescription}`,
+                  scoredDraftLead.score
+                )}
               </strong>
             </div>
             <div style={{ marginTop: 6 }}>
-              Reasons: {scoredDraftLead.reasons.length ? scoredDraftLead.reasons.join(" • ") : "No strong signals yet"}
+              Reasons:{" "}
+              {scoredDraftLead.reasons.length
+                ? scoredDraftLead.reasons.join(" • ")
+                : "No strong signals yet"}
             </div>
           </div>
         </div>
@@ -1847,22 +1895,6 @@ export default function App() {
           />
         </div>
       </div>
-    </div>
-  );
-}
-
-function LandingStat({ title, text }: { title: string; text: string }) {
-  return (
-    <div
-      style={{
-        background: "#111827",
-        border: "1px solid #334155",
-        borderRadius: 16,
-        padding: 16,
-      }}
-    >
-      <div style={{ fontWeight: 900, marginBottom: 8 }}>{title}</div>
-      <div style={{ color: "#a8b3c7", lineHeight: 1.6 }}>{text}</div>
     </div>
   );
 }
