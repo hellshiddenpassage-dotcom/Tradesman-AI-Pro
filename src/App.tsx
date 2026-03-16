@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { scoreLead, scoreBucket } from "./leadEngine";
+import { generateMarketing } from "./marketingEngine";
 
 type Language = "English" | "Spanish" | "French" | "German" | "Portuguese";
 
@@ -512,30 +513,6 @@ function suggestedReply(lead: LeadRow): string {
   return `Hi ${lead.contact_name || "there"} — thanks for reaching out about your ${jobType.toLowerCase()} project in ${lead.city || "your area"}. Based on what you sent, this looks like a rough range of ${range}. If you'd like, I can take a closer look and get you a firm quote.`;
 }
 
-function buttonStyle(
-  variant: "primary" | "secondary" = "primary"
-): React.CSSProperties {
-  return {
-    padding: "12px 16px",
-    borderRadius: 10,
-    border: variant === "primary" ? "none" : "1px solid #d1d5db",
-    background: variant === "primary" ? "#7c3aed" : "white",
-    color: variant === "primary" ? "white" : "#111827",
-    fontWeight: 700,
-    cursor: "pointer",
-  };
-}
-
-function inputBox(): React.CSSProperties {
-  return {
-    width: "100%",
-    padding: 12,
-    borderRadius: 10,
-    border: "1px solid #d1d5db",
-    boxSizing: "border-box",
-  };
-}
-
 function PricingCard({
   title,
   price,
@@ -579,6 +556,30 @@ function PricingCard({
       </button>
     </div>
   );
+}
+
+function buttonStyle(
+  variant: "primary" | "secondary" = "primary"
+): React.CSSProperties {
+  return {
+    padding: "12px 16px",
+    borderRadius: 10,
+    border: variant === "primary" ? "none" : "1px solid #d1d5db",
+    background: variant === "primary" ? "#7c3aed" : "white",
+    color: variant === "primary" ? "white" : "#111827",
+    fontWeight: 700,
+    cursor: "pointer",
+  };
+}
+
+function inputBox(): React.CSSProperties {
+  return {
+    width: "100%",
+    padding: 12,
+    borderRadius: 10,
+    border: "1px solid #d1d5db",
+    boxSizing: "border-box",
+  };
 }
 
 function StatCard({ label, value }: { label: string; value: string }) {
@@ -821,6 +822,10 @@ export default function App() {
   const [leadStatusFilter, setLeadStatusFilter] = useState("all");
   const [leadBucketFilter, setLeadBucketFilter] = useState("all");
 
+  const [marketingJob, setMarketingJob] = useState("");
+  const [marketingCity, setMarketingCity] = useState("");
+  const [marketingOutput, setMarketingOutput] = useState("");
+
   const outputRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
@@ -979,6 +984,30 @@ export default function App() {
     }
 
     await loadLeads(session.user.id);
+  }
+
+  function buildMarketing() {
+    const result = generateMarketing(marketingJob, marketingCity);
+
+    const text = `MARKETING CONTENT
+
+HOOK
+${result.hook}
+
+FACEBOOK AD
+${result.facebookAd}
+
+GOOGLE AD
+${result.googleAd}
+
+SOCIAL POST
+${result.socialPost}
+
+SPECIAL OFFER
+${result.offer}
+`;
+
+    setMarketingOutput(text);
   }
 
   const liveEstimate = useMemo(() => {
@@ -1153,7 +1182,7 @@ export default function App() {
                   marginBottom: 16,
                 }}
               >
-                Quote jobs faster, score leads, and reply with AI.
+                Quote jobs faster, score leads, and create ads with AI.
               </div>
 
               <div
@@ -1165,7 +1194,7 @@ export default function App() {
                 }}
               >
                 Tradesman AI helps contractors manage leads, build estimates,
-                translate messages, and respond faster.
+                translate messages, and generate marketing content faster.
               </div>
 
               <div
@@ -1184,8 +1213,8 @@ export default function App() {
                   text="Generate quote ranges and professional estimate text fast."
                 />
                 <LandingStat
-                  title="Translation Tools"
-                  text="Translate full output or selected text for real field use."
+                  title="Marketing AI"
+                  text="Generate hooks, ads, social posts, and offers in seconds."
                 />
               </div>
             </div>
@@ -1331,7 +1360,7 @@ export default function App() {
                   <br />
                   <strong>Pro — $49/mo</strong>
                   <br />
-                  Lead inbox, AI replies, quote ranges
+                  Lead inbox, AI replies, marketing generator
                   <br />
                   <br />
                   <strong>Team — $99/mo</strong>
@@ -1483,7 +1512,7 @@ export default function App() {
                 "Everything in Basic",
                 "Lead inbox",
                 "AI lead reply",
-                "Quote range engine",
+                "Marketing generator",
               ]}
               buttonText="Upgrade"
               onClick={() => window.open(PRO_STRIPE_LINK, "_blank")}
@@ -1894,6 +1923,58 @@ export default function App() {
             onLoadReply={setOutput}
           />
         </div>
+      </div>
+
+      <div
+        style={{
+          border: "1px solid #e5e7eb",
+          borderRadius: 14,
+          padding: 20,
+          marginBottom: 24,
+        }}
+      >
+        <h2 style={{ marginTop: 0 }}>AI Marketing Generator</h2>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr auto",
+            gap: 12,
+            marginBottom: 12,
+          }}
+        >
+          <input
+            value={marketingJob}
+            onChange={(e) => setMarketingJob(e.target.value)}
+            placeholder="Service type (example: driveway grading)"
+            style={inputBox()}
+          />
+
+          <input
+            value={marketingCity}
+            onChange={(e) => setMarketingCity(e.target.value)}
+            placeholder="City"
+            style={inputBox()}
+          />
+
+          <button onClick={buildMarketing} style={buttonStyle()}>
+            Generate
+          </button>
+        </div>
+
+        <textarea
+          value={marketingOutput}
+          onChange={(e) => setMarketingOutput(e.target.value)}
+          style={{
+            width: "100%",
+            minHeight: 220,
+            padding: 12,
+            borderRadius: 10,
+            border: "1px solid #d1d5db",
+            boxSizing: "border-box",
+          }}
+          placeholder="Generated marketing content will appear here..."
+        />
       </div>
     </div>
   );
