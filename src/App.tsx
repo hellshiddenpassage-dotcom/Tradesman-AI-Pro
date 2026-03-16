@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const BASIC_STRIPE_LINK = "https://buy.stripe.com/eVqdR26372Cb7BW8Y5d7q03";
 const PRO_STRIPE_LINK = "https://buy.stripe.com/dRmfZa3UZa4D7BWgqxd7q04";
@@ -8,7 +7,10 @@ const SUPABASE_URL = "https://ljizlaabarhyzocfcsba.supabase.co";
 const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqaXpsYWFiYXJoeXpvY2Zjc2JhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1ODcxNTIsImV4cCI6MjA4OTE2MzE1Mn0.eJstZOcLE_BALH1JMhju4zQonRxMQwk5DbEXpYUIKbw";
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabase = (window as any).supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY
+);
 
 type ThemeMode = "dark" | "light";
 type Plan = "basic" | "pro";
@@ -127,11 +129,11 @@ type AiBuilderForm = {
   prompt: string;
 };
 
-const SETTINGS_KEY = "tradesman_ai_company_settings_v7";
-const THEME_KEY = "tradesman_ai_theme_v7";
-const PLAN_KEY = "tradesman_ai_plan_v7";
-const CUSTOMERS_KEY = "tradesman_ai_customers_v7";
-const DOCS_KEY = "tradesman_ai_saved_docs_v7";
+const SETTINGS_KEY = "tradesman_ai_company_settings_v8";
+const THEME_KEY = "tradesman_ai_theme_v8";
+const PLAN_KEY = "tradesman_ai_plan_v8";
+const CUSTOMERS_KEY = "tradesman_ai_customers_v8";
+const DOCS_KEY = "tradesman_ai_saved_docs_v8";
 
 const defaultSettings: CompanySettings = {
   companyName: "Your Company",
@@ -313,23 +315,23 @@ export default function App() {
   useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then((result: any) => {
       if (mounted) {
-        setSession(data.session);
+        setSession(result?.data?.session ?? null);
         setAuthLoading(false);
       }
     });
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession);
-      setAuthLoading(false);
-    });
+    const authListener = supabase.auth.onAuthStateChange(
+      (_event: any, nextSession: any) => {
+        setSession(nextSession);
+        setAuthLoading(false);
+      }
+    );
 
     return () => {
       mounted = false;
-      subscription.unsubscribe();
+      authListener?.data?.subscription?.unsubscribe?.();
     };
   }, []);
 
@@ -434,7 +436,7 @@ export default function App() {
       return;
     }
 
-    const { error } = await supabase.auth.signUp({
+    const result = await supabase.auth.signUp({
       email: authEmail,
       password: authPassword,
       options: {
@@ -442,12 +444,12 @@ export default function App() {
       },
     });
 
-    if (error) {
-      setAuthMessage(error.message);
+    if (result.error) {
+      setAuthMessage(result.error.message);
       return;
     }
 
-    setAuthMessage("Account created. Check your email to confirm if prompted.");
+    setAuthMessage("Account created. Check your email if confirmation is required.");
   }
 
   async function handleSignIn() {
@@ -457,13 +459,13 @@ export default function App() {
       return;
     }
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const result = await supabase.auth.signInWithPassword({
       email: authEmail,
       password: authPassword,
     });
 
-    if (error) {
-      setAuthMessage(error.message);
+    if (result.error) {
+      setAuthMessage(result.error.message);
       return;
     }
 
