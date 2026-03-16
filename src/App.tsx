@@ -14,6 +14,8 @@ const supabase = (window as any).supabase.createClient(
 
 type ThemeMode = "dark" | "light";
 type Plan = "basic" | "pro";
+type EstimateStatus = "draft" | "sent" | "approved" | "paid";
+type InvoiceStatus = "unpaid" | "paid";
 type Tool =
   | "dashboard"
   | "settings"
@@ -24,6 +26,7 @@ type Tool =
   | "aiBuilder"
   | "scope"
   | "invoice"
+  | "invoices"
   | "contract"
   | "troubleshoot";
 
@@ -67,7 +70,18 @@ type EstimateRow = {
   aiPrice: number;
   aiLabor: number;
   aiMaterial: number;
-  status: string;
+  status: EstimateStatus;
+  createdAt: string;
+};
+
+type InvoiceRow = {
+  id: string;
+  customerId: string;
+  customerName: string;
+  invoiceNumber: string;
+  jobName: string;
+  total: number;
+  status: InvoiceStatus;
   createdAt: string;
 };
 
@@ -110,6 +124,7 @@ type InvoiceItem = {
 
 type InvoiceForm = {
   customerName: string;
+  customerId: string;
   jobName: string;
   invoiceNumber: string;
   taxPercent: number;
@@ -144,8 +159,8 @@ type AiBuilderForm = {
   prompt: string;
 };
 
-const SETTINGS_KEY = "tradesman_ai_company_settings_v11";
-const THEME_KEY = "tradesman_ai_theme_v11";
+const SETTINGS_KEY = "tradesman_ai_company_settings_v12";
+const THEME_KEY = "tradesman_ai_theme_v12";
 
 const defaultSettings: CompanySettings = {
   companyName: "Your Company",
@@ -251,6 +266,7 @@ export default function App() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [savedDocs, setSavedDocs] = useState<SavedDoc[]>([]);
   const [estimates, setEstimates] = useState<EstimateRow[]>([]);
+  const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
   const [cloudLoading, setCloudLoading] = useState(false);
 
   const [customerForm, setCustomerForm] = useState<Customer>({
@@ -304,6 +320,7 @@ export default function App() {
 
   const [invoice, setInvoice] = useState<InvoiceForm>({
     customerName: "",
+    customerId: "",
     jobName: "",
     invoiceNumber: "1001",
     taxPercent: getInitialSettings().taxPercent,
@@ -391,6 +408,7 @@ export default function App() {
       setCustomers([]);
       setSavedDocs([]);
       setEstimates([]);
+      setInvoices([]);
       setProfilePlan("basic");
     }
   }, [session]);
@@ -434,7 +452,7 @@ export default function App() {
   }
 
   async function loadCloudData(userId: string) {
-    const [customersResult, docsResult, estimatesResult] = await Promise.all([
+    const [customersResult, docsResult, estimatesResult, invoicesResult] = await Promise.all([
       supabase
         .from("customers")
         .select("id,name,company,phone,email,address,notes,created_at")
@@ -450,7 +468,14 @@ export default function App() {
         .select("id,customer_id,job_description,ai_price,ai_labor,ai_material,status,created_at")
         .eq("user_id", userId)
         .order("created_at", { ascending: false }),
+      supabase
+        .from("invoices")
+        .select("id,customer_id,invoice_number,job_name,total,status,created_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false }),
     ]);
+
+    let customerNameMap = new Map<string, string>();
 
     if (!customersResult.error) {
       const mappedCustomers: Customer[] = (customersResult.data || []).map((row: any) => ({
@@ -463,6 +488,10 @@ export default function App() {
         notes: row.notes || "",
       }));
       setCustomers(mappedCustomers);
+
+      mappedCustomers.forEach((c) => {
+        customerNameMap.set(c.id, c.name);
+      });
     }
 
     if (!docsResult.error) {
@@ -478,11 +507,6 @@ export default function App() {
     }
 
     if (!estimatesResult.error) {
-      const customerNameMap = new Map<string, string>();
-      (customersResult.data || []).forEach((row: any) => {
-        customerNameMap.set(row.id, row.name || "");
-      });
-
       const mappedEstimates: EstimateRow[] = (estimatesResult.data || []).map((row: any) => ({
         id: row.id,
         customerId: row.customer_id || "",
@@ -491,10 +515,24 @@ export default function App() {
         aiPrice: Number(row.ai_price || 0),
         aiLabor: Number(row.ai_labor || 0),
         aiMaterial: Number(row.ai_material || 0),
-        status: row.status || "draft",
+        status: (row.status || "draft") as EstimateStatus,
         createdAt: row.created_at ? new Date(row.created_at).toLocaleString() : "",
       }));
       setEstimates(mappedEstimates);
+    }
+
+    if (!invoicesResult.error) {
+      const mappedInvoices: InvoiceRow[] = (invoicesResult.data || []).map((row: any) => ({
+        id: row.id,
+        customerId: row.customer_id || "",
+        customerName: customerNameMap.get(row.customer_id || "") || "No customer",
+        invoiceNumber: row.invoice_number || "",
+        jobName: row.job_name || "",
+        total: Number(row.total || 0),
+        status: (row.status || "unpaid") as InvoiceStatus,
+        createdAt: row.created_at ? new Date(row.created_at).toLocaleString() : "",
+      }));
+      setInvoices(mappedInvoices);
     }
   }
 
@@ -563,6 +601,28 @@ export default function App() {
   const aiPricing = useMemo(() => {
     return generateAIPrice(estimate.aiJobDescription || estimate.notes || estimate.jobType);
   }, [estimate.aiJobDescription, estimate.notes, estimate.jobType]);
+
+  const dashboardStats = useMemo(() => {
+    const approvedJobs = estimates.filter((e) => e.status === "approved").length;
+    const paidJobs = estimates.filter((e) => e.status === "paid").length;
+    const pendingJobs = estimates.filter(
+      (e) => e.status === "draft" || e.status === "sent"
+    ).length;
+    const approvedValue = estimates
+      .filter((e) => e.status === "approved" || e.status === "paid")
+      .reduce((sum, e) => sum + e.aiPrice, 0);
+    const paidValue = invoices
+      .filter((i) => i.status === "paid")
+      .reduce((sum, i) => sum + i.total, 0);
+
+    return {
+      approvedJobs,
+      paidJobs,
+      pendingJobs,
+      approvedValue,
+      paidValue,
+    };
+  }, [estimates, invoices]);
 
   function currency(value: number) {
     return new Intl.NumberFormat("en-US", {
@@ -748,7 +808,24 @@ AI Materials:
 ${currency(pricing.materials)}
 
 AI Total:
-${currency(pricing.total)}`);
+${currency(pricing.total)}
+
+Status:
+draft`);
+  }
+
+  async function updateEstimateStatus(id: string, status: EstimateStatus) {
+    if (!session?.user?.id) return;
+
+    const result = await supabase.from("estimates").update({ status }).eq("id", id);
+
+    if (result.error) {
+      setOutput(`Status update failed: ${result.error.message}`);
+      return;
+    }
+
+    await loadCloudData(session.user.id);
+    setOutput(`Estimate status updated to ${status}.`);
   }
 
   function loadEstimateRow(row: EstimateRow) {
@@ -777,6 +854,9 @@ ${currency(row.aiMaterial)}
 AI Total:
 ${currency(row.aiPrice)}
 
+Status:
+${row.status}
+
 Created:
 ${row.createdAt}`);
   }
@@ -785,6 +865,79 @@ ${row.createdAt}`);
     if (!session?.user?.id) return;
 
     const result = await supabase.from("estimates").delete().eq("id", id);
+
+    if (result.error) {
+      setOutput(`Delete failed: ${result.error.message}`);
+      return;
+    }
+
+    await loadCloudData(session.user.id);
+  }
+
+  async function saveInvoiceToCloud() {
+    if (!session?.user?.id) {
+      alert("You must be signed in.");
+      return;
+    }
+
+    const subtotal = invoice.items.reduce(
+      (sum, item) => sum + item.quantity * item.unitPrice,
+      0
+    );
+    const tax = subtotal * (invoice.taxPercent / 100);
+    const total = subtotal + tax;
+
+    const result = await supabase.from("invoices").insert({
+      user_id: session.user.id,
+      customer_id: invoice.customerId || null,
+      invoice_number: invoice.invoiceNumber,
+      job_name: invoice.jobName || "Invoice",
+      total,
+      status: "unpaid",
+    });
+
+    if (result.error) {
+      setOutput(`Invoice save failed: ${result.error.message}`);
+      return;
+    }
+
+    await loadCloudData(session.user.id);
+    setOutput(`INVOICE SAVED
+
+Customer:
+${invoice.customerName || "No customer selected"}
+
+Invoice #:
+${invoice.invoiceNumber}
+
+Job:
+${invoice.jobName || "Invoice"}
+
+Total:
+${currency(total)}
+
+Status:
+unpaid`);
+  }
+
+  async function updateInvoiceStatus(id: string, status: InvoiceStatus) {
+    if (!session?.user?.id) return;
+
+    const result = await supabase.from("invoices").update({ status }).eq("id", id);
+
+    if (result.error) {
+      setOutput(`Invoice status update failed: ${result.error.message}`);
+      return;
+    }
+
+    await loadCloudData(session.user.id);
+    setOutput(`Invoice status updated to ${status}.`);
+  }
+
+  async function deleteInvoiceRow(id: string) {
+    if (!session?.user?.id) return;
+
+    const result = await supabase.from("invoices").delete().eq("id", id);
 
     if (result.error) {
       setOutput(`Delete failed: ${result.error.message}`);
@@ -896,7 +1049,11 @@ ${row.createdAt}`);
       customerId: customer.id,
     }));
     setScope((prev) => ({ ...prev, customerName: customer.name }));
-    setInvoice((prev) => ({ ...prev, customerName: customer.name }));
+    setInvoice((prev) => ({
+      ...prev,
+      customerName: customer.name,
+      customerId: customer.id,
+    }));
     setContract((prev) => ({ ...prev, clientName: customer.name }));
     setAiBuilder((prev) => ({ ...prev, customerName: customer.name }));
     setOutput(`Selected customer: ${customer.name}`);
@@ -1004,7 +1161,8 @@ Estimate form updated for refinement.`);
       customerName: aiBuilder.customerName,
       projectName,
       jobDescription: description,
-      materials: "Standard materials and equipment necessary to complete the described work.",
+      materials:
+        "Standard materials and equipment necessary to complete the described work.",
       customerNotes: aiBuilder.prompt,
     }));
 
@@ -1099,6 +1257,9 @@ ${invoice.customerName || "Not specified"}
 
 Job:
 ${invoice.jobName || "Not specified"}
+
+Invoice #:
+${invoice.invoiceNumber}
 
 TOTAL DUE:
 ${currency(total)}
@@ -1315,7 +1476,7 @@ LIKELY CAUSE AREAS
         padding: 20,
       }}
     >
-      <div style={{ maxWidth: 1240, margin: "0 auto" }}>
+      <div style={{ maxWidth: 1260, margin: "0 auto" }}>
         <div
           style={{
             background: `linear-gradient(180deg, ${colors.panelAlt}, ${colors.panelBg})`,
@@ -1375,25 +1536,34 @@ LIKELY CAUSE AREAS
           >
             <div
               style={{
-                border: `1px solid ${profilePlan === "basic" ? colors.accent : colors.border}`,
+                border: `1px solid ${
+                  profilePlan === "basic" ? colors.accent : colors.border
+                }`,
                 borderRadius: 14,
                 padding: 18,
-                background: profilePlan === "basic" ? colors.accentSoft : colors.outputBg,
+                background:
+                  profilePlan === "basic" ? colors.accentSoft : colors.outputBg,
               }}
             >
-              <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 6 }}>Basic</div>
-              <div style={{ fontSize: 30, fontWeight: 900, marginBottom: 8 }}>$9/mo</div>
-              <div style={{ color: colors.muted, marginBottom: 12 }}>5-day free trial</div>
+              <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 6 }}>
+                Basic
+              </div>
+              <div style={{ fontSize: 30, fontWeight: 900, marginBottom: 8 }}>
+                $9/mo
+              </div>
+              <div style={{ color: colors.muted, marginBottom: 12 }}>
+                5-day free trial
+              </div>
               <div style={{ lineHeight: 1.7, marginBottom: 16 }}>
                 • Estimates
                 <br />
                 • Saved Customers
                 <br />
-                • Saved Estimate History
+                • Estimate History
+                <br />
+                • Invoice History
                 <br />
                 • Saved Documents
-                <br />
-                • Invoices
                 <br />
                 • Contracts
               </div>
@@ -1407,15 +1577,24 @@ LIKELY CAUSE AREAS
 
             <div
               style={{
-                border: `1px solid ${profilePlan === "pro" ? colors.accent : colors.border}`,
+                border: `1px solid ${
+                  profilePlan === "pro" ? colors.accent : colors.border
+                }`,
                 borderRadius: 14,
                 padding: 18,
-                background: profilePlan === "pro" ? colors.accentSoft : colors.outputBg,
+                background:
+                  profilePlan === "pro" ? colors.accentSoft : colors.outputBg,
               }}
             >
-              <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 6 }}>Pro</div>
-              <div style={{ fontSize: 30, fontWeight: 900, marginBottom: 8 }}>$19/mo</div>
-              <div style={{ color: colors.muted, marginBottom: 12 }}>AI-powered plan</div>
+              <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 6 }}>
+                Pro
+              </div>
+              <div style={{ fontSize: 30, fontWeight: 900, marginBottom: 8 }}>
+                $19/mo
+              </div>
+              <div style={{ color: colors.muted, marginBottom: 12 }}>
+                AI-powered plan
+              </div>
               <div style={{ lineHeight: 1.7, marginBottom: 16 }}>
                 • Everything in Basic
                 <br />
@@ -1448,19 +1627,82 @@ LIKELY CAUSE AREAS
                 marginBottom: 20,
               }}
             >
-              <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>Tools</div>
+              <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>
+                Tools
+              </div>
 
-              <button style={toolBtnStyle(tool === "dashboard")} onClick={() => setTool("dashboard")}>Dashboard</button>
-              <button style={toolBtnStyle(tool === "settings")} onClick={() => setTool("settings")}>Company Settings</button>
-              <button style={toolBtnStyle(tool === "customers")} onClick={() => setTool("customers")}>Customers</button>
-              <button style={toolBtnStyle(tool === "estimate")} onClick={() => setTool("estimate")}>Estimate Generator</button>
-              <button style={toolBtnStyle(tool === "estimates")} onClick={() => setTool("estimates")}>Estimate History</button>
-              <button style={toolBtnStyle(tool === "saved")} onClick={() => setTool("saved")}>Saved Docs</button>
-              <button style={toolBtnStyle(tool === "aiBuilder", !isPro())} onClick={() => setTool("aiBuilder")}>AI Quick Builder (Pro)</button>
-              <button style={toolBtnStyle(tool === "scope")} onClick={() => setTool("scope")}>Scope Writer</button>
-              <button style={toolBtnStyle(tool === "invoice")} onClick={() => setTool("invoice")}>Invoice Builder</button>
-              <button style={toolBtnStyle(tool === "contract")} onClick={() => setTool("contract")}>Contract Builder</button>
-              <button style={toolBtnStyle(tool === "troubleshoot", !isPro())} onClick={() => setTool("troubleshoot")}>Troubleshooting (Pro)</button>
+              <button
+                style={toolBtnStyle(tool === "dashboard")}
+                onClick={() => setTool("dashboard")}
+              >
+                Dashboard
+              </button>
+              <button
+                style={toolBtnStyle(tool === "settings")}
+                onClick={() => setTool("settings")}
+              >
+                Company Settings
+              </button>
+              <button
+                style={toolBtnStyle(tool === "customers")}
+                onClick={() => setTool("customers")}
+              >
+                Customers
+              </button>
+              <button
+                style={toolBtnStyle(tool === "estimate")}
+                onClick={() => setTool("estimate")}
+              >
+                Estimate Generator
+              </button>
+              <button
+                style={toolBtnStyle(tool === "estimates")}
+                onClick={() => setTool("estimates")}
+              >
+                Estimate History
+              </button>
+              <button
+                style={toolBtnStyle(tool === "invoice")}
+                onClick={() => setTool("invoice")}
+              >
+                Invoice Builder
+              </button>
+              <button
+                style={toolBtnStyle(tool === "invoices")}
+                onClick={() => setTool("invoices")}
+              >
+                Invoice History
+              </button>
+              <button
+                style={toolBtnStyle(tool === "saved")}
+                onClick={() => setTool("saved")}
+              >
+                Saved Docs
+              </button>
+              <button
+                style={toolBtnStyle(tool === "aiBuilder", !isPro())}
+                onClick={() => setTool("aiBuilder")}
+              >
+                AI Quick Builder (Pro)
+              </button>
+              <button
+                style={toolBtnStyle(tool === "scope")}
+                onClick={() => setTool("scope")}
+              >
+                Scope Writer
+              </button>
+              <button
+                style={toolBtnStyle(tool === "contract")}
+                onClick={() => setTool("contract")}
+              >
+                Contract Builder
+              </button>
+              <button
+                style={toolBtnStyle(tool === "troubleshoot", !isPro())}
+                onClick={() => setTool("troubleshoot")}
+              >
+                Troubleshooting (Pro)
+              </button>
 
               <div style={{ marginTop: 12, color: colors.muted, fontSize: 13 }}>
                 Cloud sync: {cloudLoading ? "Loading..." : "Connected"}
@@ -1470,18 +1712,76 @@ LIKELY CAUSE AREAS
 
           <div>
             {tool === "dashboard" && (
-              <Card title="Dashboard" colors={colors}>
+              <Card title="Contractor Dashboard" colors={colors}>
                 <div
                   style={{
                     display: "grid",
                     gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
                     gap: 12,
+                    marginBottom: 18,
                   }}
                 >
                   <Metric label="Plan" value={profilePlan} colors={colors} />
                   <Metric label="Customers" value={String(customers.length)} colors={colors} />
                   <Metric label="Estimates" value={String(estimates.length)} colors={colors} />
-                  <Metric label="Saved Docs" value={String(savedDocs.length)} colors={colors} />
+                  <Metric label="Invoices" value={String(invoices.length)} colors={colors} />
+                  <Metric label="Pending Jobs" value={String(dashboardStats.pendingJobs)} colors={colors} />
+                  <Metric label="Approved Jobs" value={String(dashboardStats.approvedJobs)} colors={colors} />
+                  <Metric label="Paid Jobs" value={String(dashboardStats.paidJobs)} colors={colors} />
+                  <Metric label="Approved Value" value={currency(dashboardStats.approvedValue)} colors={colors} />
+                  <Metric label="Paid Revenue" value={currency(dashboardStats.paidValue)} colors={colors} />
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 16,
+                  }}
+                >
+                  <div
+                    style={{
+                      background: colors.outputBg,
+                      border: `1px solid ${colors.border}`,
+                      borderRadius: 12,
+                      padding: 14,
+                    }}
+                  >
+                    <div style={{ fontWeight: 800, marginBottom: 10 }}>Recent Estimates</div>
+                    {estimates.slice(0, 5).map((e) => (
+                      <div key={e.id} style={{ marginBottom: 10 }}>
+                        <div>{e.customerName}</div>
+                        <div style={{ color: colors.muted, fontSize: 13 }}>
+                          {e.status} • {currency(e.aiPrice)}
+                        </div>
+                      </div>
+                    ))}
+                    {estimates.length === 0 && (
+                      <div style={{ color: colors.muted }}>No estimates yet.</div>
+                    )}
+                  </div>
+
+                  <div
+                    style={{
+                      background: colors.outputBg,
+                      border: `1px solid ${colors.border}`,
+                      borderRadius: 12,
+                      padding: 14,
+                    }}
+                  >
+                    <div style={{ fontWeight: 800, marginBottom: 10 }}>Recent Invoices</div>
+                    {invoices.slice(0, 5).map((i) => (
+                      <div key={i.id} style={{ marginBottom: 10 }}>
+                        <div>{i.customerName}</div>
+                        <div style={{ color: colors.muted, fontSize: 13 }}>
+                          {i.status} • {currency(i.total)}
+                        </div>
+                      </div>
+                    ))}
+                    {invoices.length === 0 && (
+                      <div style={{ color: colors.muted }}>No invoices yet.</div>
+                    )}
+                  </div>
                 </div>
               </Card>
             )}
@@ -1522,22 +1822,12 @@ LIKELY CAUSE AREAS
                     <div style={{ color: colors.muted }}>No customers yet.</div>
                   ) : (
                     customers.map((c) => (
-                      <div
-                        key={c.id}
-                        style={{
-                          background: colors.outputBg,
-                          border: `1px solid ${colors.border}`,
-                          borderRadius: 12,
-                          padding: 14,
-                        }}
-                      >
+                      <div key={c.id} style={{ background: colors.outputBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 14 }}>
                         <div style={{ fontWeight: 800 }}>{c.name}</div>
                         <div style={{ color: colors.muted, marginTop: 4 }}>
                           {c.company || "-"} | {c.phone || "-"} | {c.email || "-"}
                         </div>
-                        <div style={{ color: colors.muted, marginTop: 6 }}>
-                          {c.address || ""}
-                        </div>
+                        <div style={{ color: colors.muted, marginTop: 6 }}>{c.address || ""}</div>
                         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
                           <button onClick={() => useCustomer(c)} style={secondaryBtn(colors)}>Use</button>
                           <button onClick={() => editCustomer(c)} style={secondaryBtn(colors)}>Edit</button>
@@ -1562,19 +1852,8 @@ LIKELY CAUSE AREAS
                   <Field label="Depth (in)" type="number" value={String(estimate.depthInches)} onChange={(v) => setEstimate({ ...estimate, depthInches: Number(v) || 0 })} colors={colors} />
                 </Grid>
 
-                <Area
-                  label="AI Job Description (used for AI pricing)"
-                  value={estimate.aiJobDescription}
-                  onChange={(v) => setEstimate({ ...estimate, aiJobDescription: v })}
-                  colors={colors}
-                />
-
-                <Area
-                  label="Notes"
-                  value={estimate.notes}
-                  onChange={(v) => setEstimate({ ...estimate, notes: v })}
-                  colors={colors}
-                />
+                <Area label="AI Job Description (used for AI pricing)" value={estimate.aiJobDescription} onChange={(v) => setEstimate({ ...estimate, aiJobDescription: v })} colors={colors} />
+                <Area label="Notes" value={estimate.notes} onChange={(v) => setEstimate({ ...estimate, notes: v })} colors={colors} />
 
                 <div
                   style={{
@@ -1588,15 +1867,13 @@ LIKELY CAUSE AREAS
                   <div style={{ fontWeight: 800, marginBottom: 10 }}>AI Price Snapshot</div>
                   <div>Labor: {currency(aiPricing.labor)}</div>
                   <div>Materials: {currency(aiPricing.materials)}</div>
-                  <div style={{ fontWeight: 800, marginTop: 6 }}>
-                    AI Total: {currency(aiPricing.total)}
-                  </div>
+                  <div style={{ fontWeight: 800, marginTop: 6 }}>AI Total: {currency(aiPricing.total)}</div>
                 </div>
               </Card>
             )}
 
             {tool === "estimates" && (
-              <Card title="Saved Estimate History" colors={colors}>
+              <Card title="Estimate History + Job Status" colors={colors}>
                 <div style={{ display: "grid", gap: 12 }}>
                   {estimates.length === 0 ? (
                     <div style={{ color: colors.muted }}>No saved estimates yet.</div>
@@ -1618,9 +1895,84 @@ LIKELY CAUSE AREAS
                           Labor: {currency(row.aiLabor)} | Materials: {currency(row.aiMaterial)} | Total:{" "}
                           <strong>{currency(row.aiPrice)}</strong>
                         </div>
+                        <div style={{ marginTop: 8, fontWeight: 700 }}>Status: {row.status}</div>
+
                         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
                           <button onClick={() => loadEstimateRow(row)} style={secondaryBtn(colors)}>Load</button>
+                          <button onClick={() => void updateEstimateStatus(row.id, "sent")} style={secondaryBtn(colors)}>Mark Sent</button>
+                          <button onClick={() => void updateEstimateStatus(row.id, "approved")} style={secondaryBtn(colors)}>Mark Approved</button>
+                          <button onClick={() => void updateEstimateStatus(row.id, "paid")} style={secondaryBtn(colors)}>Mark Paid</button>
                           <button onClick={() => void deleteEstimateRow(row.id)} style={dangerBtn(colors)}>Delete</button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </Card>
+            )}
+
+            {tool === "invoice" && (
+              <Card title="Invoice Builder" colors={colors}>
+                <Grid>
+                  <Field label="Customer Name" value={invoice.customerName} onChange={(v) => setInvoice({ ...invoice, customerName: v })} colors={colors} />
+                  <Field label="Job Name" value={invoice.jobName} onChange={(v) => setInvoice({ ...invoice, jobName: v })} colors={colors} />
+                  <Field label="Invoice Number" value={invoice.invoiceNumber} onChange={(v) => setInvoice({ ...invoice, invoiceNumber: v })} colors={colors} />
+                </Grid>
+
+                <div
+                  style={{
+                    background: colors.outputBg,
+                    border: `1px solid ${colors.border}`,
+                    borderRadius: 12,
+                    padding: 14,
+                    marginBottom: 16,
+                  }}
+                >
+                  <div style={{ fontWeight: 800, marginBottom: 10 }}>Invoice Preview</div>
+                  <div>
+                    Total:{" "}
+                    {currency(
+                      invoice.items.reduce(
+                        (sum, item) => sum + item.quantity * item.unitPrice,
+                        0
+                      ) *
+                        (1 + invoice.taxPercent / 100)
+                    )}
+                  </div>
+                </div>
+              </Card>
+            )}
+
+            {tool === "invoices" && (
+              <Card title="Invoice History" colors={colors}>
+                <div style={{ display: "grid", gap: 12 }}>
+                  {invoices.length === 0 ? (
+                    <div style={{ color: colors.muted }}>No saved invoices yet.</div>
+                  ) : (
+                    invoices.map((row) => (
+                      <div
+                        key={row.id}
+                        style={{
+                          background: colors.outputBg,
+                          border: `1px solid ${colors.border}`,
+                          borderRadius: 12,
+                          padding: 14,
+                        }}
+                      >
+                        <div style={{ fontWeight: 800 }}>
+                          {row.invoiceNumber || "Invoice"} — {row.customerName}
+                        </div>
+                        <div style={{ color: colors.muted, marginTop: 4 }}>{row.createdAt}</div>
+                        <div style={{ marginTop: 8 }}>{row.jobName}</div>
+                        <div style={{ marginTop: 8 }}>
+                          Total: <strong>{currency(row.total)}</strong>
+                        </div>
+                        <div style={{ marginTop: 8, fontWeight: 700 }}>Status: {row.status}</div>
+
+                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
+                          <button onClick={() => void updateInvoiceStatus(row.id, "paid")} style={secondaryBtn(colors)}>Mark Paid</button>
+                          <button onClick={() => void updateInvoiceStatus(row.id, "unpaid")} style={secondaryBtn(colors)}>Mark Unpaid</button>
+                          <button onClick={() => void deleteInvoiceRow(row.id)} style={dangerBtn(colors)}>Delete</button>
                         </div>
                       </div>
                     ))
@@ -1636,15 +1988,7 @@ LIKELY CAUSE AREAS
                     <div style={{ color: colors.muted }}>No saved documents yet.</div>
                   ) : (
                     savedDocs.map((d) => (
-                      <div
-                        key={d.id}
-                        style={{
-                          background: colors.outputBg,
-                          border: `1px solid ${colors.border}`,
-                          borderRadius: 12,
-                          padding: 14,
-                        }}
-                      >
+                      <div key={d.id} style={{ background: colors.outputBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 14 }}>
                         <div style={{ fontWeight: 800 }}>{d.title}</div>
                         <div style={{ color: colors.muted, marginTop: 4 }}>
                           {d.type} | {d.customerName || "No customer"} | {d.createdAt}
@@ -1685,16 +2029,6 @@ LIKELY CAUSE AREAS
               </Card>
             )}
 
-            {tool === "invoice" && (
-              <Card title="Invoice Builder" colors={colors}>
-                <Grid>
-                  <Field label="Customer Name" value={invoice.customerName} onChange={(v) => setInvoice({ ...invoice, customerName: v })} colors={colors} />
-                  <Field label="Job Name" value={invoice.jobName} onChange={(v) => setInvoice({ ...invoice, jobName: v })} colors={colors} />
-                  <Field label="Invoice Number" value={invoice.invoiceNumber} onChange={(v) => setInvoice({ ...invoice, invoiceNumber: v })} colors={colors} />
-                </Grid>
-              </Card>
-            )}
-
             {tool === "contract" && (
               <Card title="Contract Builder" colors={colors}>
                 <Grid>
@@ -1714,66 +2048,87 @@ LIKELY CAUSE AREAS
               </Card>
             )}
 
-            {tool !== "dashboard" && tool !== "customers" && tool !== "saved" && tool !== "estimates" && (
-              <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
-                {tool !== "aiBuilder" && (
-                  <button onClick={generateFromActiveTool} style={primaryBtn(colors)}>
-                    {tool === "settings" ? "Save Settings" : "Generate Output"}
-                  </button>
-                )}
-                <button onClick={copyOutput} style={secondaryBtn(colors)}>Copy</button>
-                <button onClick={exportPDF} style={secondaryBtn(colors)}>Export PDF</button>
-                {tool === "estimate" && (
-                  <button onClick={() => void saveEstimateToCloud()} style={secondaryBtn(colors)}>
-                    Save Estimate
-                  </button>
-                )}
-                {tool === "estimate" && (
-                  <button
-                    onClick={() =>
-                      void saveCurrentOutput(
-                        "estimate",
-                        `${estimate.jobType} Estimate`,
-                        estimate.customerName
-                      )
-                    }
-                    style={secondaryBtn(colors)}
-                  >
-                    Save Estimate Doc
-                  </button>
-                )}
-                {tool === "scope" && (
-                  <button
-                    onClick={() =>
-                      void saveCurrentOutput("scope", scope.projectName || "Scope of Work", scope.customerName)
-                    }
-                    style={secondaryBtn(colors)}
-                  >
-                    Save Scope
-                  </button>
-                )}
-                {tool === "invoice" && (
-                  <button
-                    onClick={() =>
-                      void saveCurrentOutput("invoice", `Invoice ${invoice.invoiceNumber}`, invoice.customerName)
-                    }
-                    style={secondaryBtn(colors)}
-                  >
-                    Save Invoice
-                  </button>
-                )}
-                {tool === "contract" && (
-                  <button
-                    onClick={() =>
-                      void saveCurrentOutput("contract", contract.projectName || contract.contractTitle, contract.clientName)
-                    }
-                    style={secondaryBtn(colors)}
-                  >
-                    Save Contract
-                  </button>
-                )}
-              </div>
-            )}
+            {tool !== "dashboard" &&
+              tool !== "customers" &&
+              tool !== "saved" &&
+              tool !== "estimates" &&
+              tool !== "invoices" && (
+                <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
+                  {tool !== "aiBuilder" && (
+                    <button onClick={generateFromActiveTool} style={primaryBtn(colors)}>
+                      {tool === "settings" ? "Save Settings" : "Generate Output"}
+                    </button>
+                  )}
+                  <button onClick={copyOutput} style={secondaryBtn(colors)}>Copy</button>
+                  <button onClick={exportPDF} style={secondaryBtn(colors)}>Export PDF</button>
+
+                  {tool === "estimate" && (
+                    <>
+                      <button onClick={() => void saveEstimateToCloud()} style={secondaryBtn(colors)}>
+                        Save Estimate
+                      </button>
+                      <button
+                        onClick={() =>
+                          void saveCurrentOutput(
+                            "estimate",
+                            `${estimate.jobType} Estimate`,
+                            estimate.customerName
+                          )
+                        }
+                        style={secondaryBtn(colors)}
+                      >
+                        Save Estimate Doc
+                      </button>
+                    </>
+                  )}
+
+                  {tool === "invoice" && (
+                    <>
+                      <button onClick={() => void saveInvoiceToCloud()} style={secondaryBtn(colors)}>
+                        Save Invoice
+                      </button>
+                      <button
+                        onClick={() =>
+                          void saveCurrentOutput(
+                            "invoice",
+                            `Invoice ${invoice.invoiceNumber}`,
+                            invoice.customerName
+                          )
+                        }
+                        style={secondaryBtn(colors)}
+                      >
+                        Save Invoice Doc
+                      </button>
+                    </>
+                  )}
+
+                  {tool === "scope" && (
+                    <button
+                      onClick={() =>
+                        void saveCurrentOutput("scope", scope.projectName || "Scope of Work", scope.customerName)
+                      }
+                      style={secondaryBtn(colors)}
+                    >
+                      Save Scope
+                    </button>
+                  )}
+
+                  {tool === "contract" && (
+                    <button
+                      onClick={() =>
+                        void saveCurrentOutput(
+                          "contract",
+                          contract.projectName || contract.contractTitle,
+                          contract.clientName
+                        )
+                      }
+                      style={secondaryBtn(colors)}
+                    >
+                      Save Contract
+                    </button>
+                  )}
+                </div>
+              )}
 
             <div
               style={{
