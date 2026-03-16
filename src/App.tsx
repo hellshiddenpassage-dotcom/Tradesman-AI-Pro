@@ -129,11 +129,9 @@ type AiBuilderForm = {
   prompt: string;
 };
 
-const SETTINGS_KEY = "tradesman_ai_company_settings_v8";
-const THEME_KEY = "tradesman_ai_theme_v8";
-const PLAN_KEY = "tradesman_ai_plan_v8";
-const CUSTOMERS_KEY = "tradesman_ai_customers_v8";
-const DOCS_KEY = "tradesman_ai_saved_docs_v8";
+const SETTINGS_KEY = "tradesman_ai_company_settings_v9";
+const THEME_KEY = "tradesman_ai_theme_v9";
+const PLAN_KEY = "tradesman_ai_plan_v9";
 
 const defaultSettings: CompanySettings = {
   companyName: "Your Company",
@@ -175,28 +173,6 @@ function getInitialPlan(): Plan {
   }
 }
 
-function getInitialCustomers(): Customer[] {
-  try {
-    const saved = localStorage.getItem(CUSTOMERS_KEY);
-    return saved ? JSON.parse(saved) : [];
-  } catch {
-    return [];
-  }
-}
-
-function getInitialDocs(): SavedDoc[] {
-  try {
-    const saved = localStorage.getItem(DOCS_KEY);
-    return saved ? JSON.parse(saved) : [];
-  } catch {
-    return [];
-  }
-}
-
-function uid() {
-  return `${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-}
-
 export default function App() {
   const [session, setSession] = useState<any>(null);
   const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
@@ -211,8 +187,9 @@ export default function App() {
   const [output, setOutput] = useState("Your generated output will appear here.");
 
   const [settings, setSettings] = useState<CompanySettings>(getInitialSettings);
-  const [customers, setCustomers] = useState<Customer[]>(getInitialCustomers);
-  const [savedDocs, setSavedDocs] = useState<SavedDoc[]>(getInitialDocs);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [savedDocs, setSavedDocs] = useState<SavedDoc[]>([]);
+  const [cloudLoading, setCloudLoading] = useState(false);
 
   const [customerForm, setCustomerForm] = useState<Customer>({
     id: "",
@@ -348,12 +325,59 @@ export default function App() {
   }, [plan]);
 
   useEffect(() => {
-    localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(customers));
-  }, [customers]);
+    if (session?.user?.id) {
+      void loadCloudData(session.user.id);
+    } else {
+      setCustomers([]);
+      setSavedDocs([]);
+    }
+  }, [session]);
 
-  useEffect(() => {
-    localStorage.setItem(DOCS_KEY, JSON.stringify(savedDocs));
-  }, [savedDocs]);
+  async function loadCloudData(userId: string) {
+    setCloudLoading(true);
+
+    const [customersResult, docsResult] = await Promise.all([
+      supabase
+        .from("customers")
+        .select("id,name,company,phone,email,address,notes,created_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("saved_docs")
+        .select("id,type,title,customer_name,content,created_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false }),
+    ]);
+
+    if (!customersResult.error) {
+      const mappedCustomers: Customer[] = (customersResult.data || []).map((row: any) => ({
+        id: row.id,
+        name: row.name || "",
+        company: row.company || "",
+        phone: row.phone || "",
+        email: row.email || "",
+        address: row.address || "",
+        notes: row.notes || "",
+      }));
+      setCustomers(mappedCustomers);
+    }
+
+    if (!docsResult.error) {
+      const mappedDocs: SavedDoc[] = (docsResult.data || []).map((row: any) => ({
+        id: row.id,
+        type: row.type || "",
+        title: row.title || "",
+        customerName: row.customer_name || "",
+        content: row.content || "",
+        createdAt: row.created_at
+          ? new Date(row.created_at).toLocaleString()
+          : "",
+      }));
+      setSavedDocs(mappedDocs);
+    }
+
+    setCloudLoading(false);
+  }
 
   const colors = useMemo(() => {
     if (theme === "light") {
@@ -369,7 +393,6 @@ export default function App() {
         outputBg: "#f8fafc",
         inputBg: "#ffffff",
         danger: "#b42318",
-        success: "#067647",
       };
     }
 
@@ -385,7 +408,6 @@ export default function App() {
       outputBg: "#111827",
       inputBg: "#0f1724",
       danger: "#ef4444",
-      success: "#22c55e",
     };
   }, [theme]);
 
@@ -525,32 +547,40 @@ export default function App() {
     doc.save("TradesmanAI_Document.pdf");
   }
 
-  function saveCurrentOutput(type: string, title: string, customerName: string) {
+  async function saveCurrentOutput(type: string, title: string, customerName: string) {
     if (!output || output === "Your generated output will appear here.") {
       alert("Generate output first.");
       return;
     }
 
-    const doc: SavedDoc = {
-      id: uid(),
+    if (!session?.user?.id) {
+      alert("You must be signed in.");
+      return;
+    }
+
+    const result = await supabase.from("saved_docs").insert({
+      user_id: session.user.id,
       type,
       title: title || `${type} document`,
-      customerName: customerName || "",
-      createdAt: new Date().toLocaleString(),
+      customer_name: customerName || "",
       content: output,
-    };
+    });
 
-    setSavedDocs((prev) => [doc, ...prev]);
+    if (result.error) {
+      setOutput(`Save failed: ${result.error.message}`);
+      return;
+    }
+
+    await loadCloudData(session.user.id);
     setOutput(`DOCUMENT SAVED
 
 Title:
-${doc.title}
+${title || `${type} document`}
 
 Customer:
-${doc.customerName || "Not specified"}
+${customerName || "Not specified"}
 
-Saved:
-${doc.createdAt}`);
+Saved to cloud successfully.`);
   }
 
   function loadSavedDoc(doc: SavedDoc) {
@@ -558,22 +588,62 @@ ${doc.createdAt}`);
     setTool("saved");
   }
 
-  function deleteSavedDoc(id: string) {
-    setSavedDocs((prev) => prev.filter((d) => d.id !== id));
+  async function deleteSavedDoc(id: string) {
+    if (!session?.user?.id) return;
+
+    const result = await supabase.from("saved_docs").delete().eq("id", id);
+
+    if (result.error) {
+      setOutput(`Delete failed: ${result.error.message}`);
+      return;
+    }
+
+    await loadCloudData(session.user.id);
   }
 
-  function saveCustomer() {
+  async function saveCustomer() {
     if (!customerForm.name.trim()) {
       alert("Customer name is required.");
       return;
     }
 
+    if (!session?.user?.id) {
+      alert("You must be signed in.");
+      return;
+    }
+
     if (customerForm.id) {
-      setCustomers((prev) =>
-        prev.map((c) => (c.id === customerForm.id ? customerForm : c))
-      );
+      const result = await supabase
+        .from("customers")
+        .update({
+          name: customerForm.name,
+          company: customerForm.company,
+          phone: customerForm.phone,
+          email: customerForm.email,
+          address: customerForm.address,
+          notes: customerForm.notes,
+        })
+        .eq("id", customerForm.id);
+
+      if (result.error) {
+        setOutput(`Update failed: ${result.error.message}`);
+        return;
+      }
     } else {
-      setCustomers((prev) => [{ ...customerForm, id: uid() }, ...prev]);
+      const result = await supabase.from("customers").insert({
+        user_id: session.user.id,
+        name: customerForm.name,
+        company: customerForm.company,
+        phone: customerForm.phone,
+        email: customerForm.email,
+        address: customerForm.address,
+        notes: customerForm.notes,
+      });
+
+      if (result.error) {
+        setOutput(`Save failed: ${result.error.message}`);
+        return;
+      }
     }
 
     setCustomerForm({
@@ -586,7 +656,8 @@ ${doc.createdAt}`);
       notes: "",
     });
 
-    setOutput("Customer saved.");
+    await loadCloudData(session.user.id);
+    setOutput("Customer saved to cloud.");
   }
 
   function editCustomer(c: Customer) {
@@ -594,8 +665,17 @@ ${doc.createdAt}`);
     setTool("customers");
   }
 
-  function deleteCustomer(id: string) {
-    setCustomers((prev) => prev.filter((c) => c.id !== id));
+  async function deleteCustomer(id: string) {
+    if (!session?.user?.id) return;
+
+    const result = await supabase.from("customers").delete().eq("id", id);
+
+    if (result.error) {
+      setOutput(`Delete failed: ${result.error.message}`);
+      return;
+    }
+
+    await loadCloudData(session.user.id);
   }
 
   function useCustomer(name: string) {
@@ -631,7 +711,7 @@ ${doc.createdAt}`);
       ],
     }));
 
-    setOutput("Company settings saved.");
+    setOutput("Company settings saved locally.");
   }
 
   function smartExtract(prompt: string, fallback: number) {
@@ -1254,6 +1334,16 @@ LIKELY CAUSE AREAS
               <button style={toolBtnStyle(tool === "invoice")} onClick={() => setTool("invoice")}>Invoice Builder</button>
               <button style={toolBtnStyle(tool === "contract")} onClick={() => setTool("contract")}>Contract Builder</button>
               <button style={toolBtnStyle(tool === "troubleshoot", plan !== "pro")} onClick={() => setTool("troubleshoot")}>Troubleshooting (Pro)</button>
+
+              <div
+                style={{
+                  marginTop: 12,
+                  color: colors.muted,
+                  fontSize: 13,
+                }}
+              >
+                Cloud sync: {cloudLoading ? "Loading..." : "Connected"}
+              </div>
             </div>
           </div>
 
@@ -1300,7 +1390,7 @@ LIKELY CAUSE AREAS
                 </Grid>
                 <Area label="Notes" value={customerForm.notes} onChange={(v) => setCustomerForm({ ...customerForm, notes: v })} colors={colors} />
                 <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
-                  <button onClick={saveCustomer} style={primaryBtn(colors)}>
+                  <button onClick={() => void saveCustomer()} style={primaryBtn(colors)}>
                     {customerForm.id ? "Update Customer" : "Save Customer"}
                   </button>
                 </div>
@@ -1318,7 +1408,7 @@ LIKELY CAUSE AREAS
                         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
                           <button onClick={() => useCustomer(c.name)} style={secondaryBtn(colors)}>Use in Forms</button>
                           <button onClick={() => editCustomer(c)} style={secondaryBtn(colors)}>Edit</button>
-                          <button onClick={() => deleteCustomer(c.id)} style={dangerBtn(colors)}>Delete</button>
+                          <button onClick={() => void deleteCustomer(c.id)} style={dangerBtn(colors)}>Delete</button>
                         </div>
                       </div>
                     ))
@@ -1341,7 +1431,7 @@ LIKELY CAUSE AREAS
                         </div>
                         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
                           <button onClick={() => loadSavedDoc(d)} style={secondaryBtn(colors)}>Open</button>
-                          <button onClick={() => deleteSavedDoc(d.id)} style={dangerBtn(colors)}>Delete</button>
+                          <button onClick={() => void deleteSavedDoc(d.id)} style={dangerBtn(colors)}>Delete</button>
                         </div>
                       </div>
                     ))
@@ -1437,22 +1527,22 @@ LIKELY CAUSE AREAS
                   Export PDF
                 </button>
                 {tool === "estimate" && (
-                  <button onClick={() => saveCurrentOutput("estimate", `${estimate.jobType} Estimate`, estimate.customerName)} style={secondaryBtn(colors)}>
+                  <button onClick={() => void saveCurrentOutput("estimate", `${estimate.jobType} Estimate`, estimate.customerName)} style={secondaryBtn(colors)}>
                     Save Estimate
                   </button>
                 )}
                 {tool === "scope" && (
-                  <button onClick={() => saveCurrentOutput("scope", scope.projectName || "Scope of Work", scope.customerName)} style={secondaryBtn(colors)}>
+                  <button onClick={() => void saveCurrentOutput("scope", scope.projectName || "Scope of Work", scope.customerName)} style={secondaryBtn(colors)}>
                     Save Scope
                   </button>
                 )}
                 {tool === "invoice" && (
-                  <button onClick={() => saveCurrentOutput("invoice", `Invoice ${invoice.invoiceNumber}`, invoice.customerName)} style={secondaryBtn(colors)}>
+                  <button onClick={() => void saveCurrentOutput("invoice", `Invoice ${invoice.invoiceNumber}`, invoice.customerName)} style={secondaryBtn(colors)}>
                     Save Invoice
                   </button>
                 )}
                 {tool === "contract" && (
-                  <button onClick={() => saveCurrentOutput("contract", contract.projectName || contract.contractTitle, contract.clientName)} style={secondaryBtn(colors)}>
+                  <button onClick={() => void saveCurrentOutput("contract", contract.projectName || contract.contractTitle, contract.clientName)} style={secondaryBtn(colors)}>
                     Save Contract
                   </button>
                 )}
