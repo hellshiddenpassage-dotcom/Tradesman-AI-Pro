@@ -484,13 +484,12 @@ function translateText(text: string, language: Language): string {
 }
 
 function quoteRangeFromLead(description: string, score: number): string {
-  const jobType = detectJobType(description);
   const estimate = generateEstimateData(description || "General contractor job");
 
   let low = Math.round(estimate.total * 0.85);
   let high = Math.round(estimate.total * 1.2);
 
-  if (jobType === "Mechanical Repair") {
+  if (detectJobType(description) === "Mechanical Repair") {
     low = Math.round(estimate.total * 0.9);
     high = Math.round(estimate.total * 1.1);
   }
@@ -511,6 +510,30 @@ function suggestedReply(lead: LeadRow): string {
   );
 
   return `Hi ${lead.contact_name || "there"} — thanks for reaching out about your ${jobType.toLowerCase()} project in ${lead.city || "your area"}. Based on what you sent, this looks like a rough range of ${range}. If you'd like, I can take a closer look and get you a firm quote.`;
+}
+
+function buttonStyle(
+  variant: "primary" | "secondary" = "primary"
+): React.CSSProperties {
+  return {
+    padding: "12px 16px",
+    borderRadius: 10,
+    border: variant === "primary" ? "none" : "1px solid #d1d5db",
+    background: variant === "primary" ? "#7c3aed" : "white",
+    color: variant === "primary" ? "white" : "#111827",
+    fontWeight: 700,
+    cursor: "pointer",
+  };
+}
+
+function inputBox(): React.CSSProperties {
+  return {
+    width: "100%",
+    padding: 12,
+    borderRadius: 10,
+    border: "1px solid #d1d5db",
+    boxSizing: "border-box",
+  };
 }
 
 function PricingCard({
@@ -538,7 +561,9 @@ function PricingCard({
       }}
     >
       <div style={{ fontWeight: 800, fontSize: 18 }}>{title}</div>
-      <div style={{ fontWeight: 900, fontSize: 28, margin: "8px 0 12px" }}>{price}</div>
+      <div style={{ fontWeight: 900, fontSize: 28, margin: "8px 0 12px" }}>
+        {price}
+      </div>
       <ul style={{ paddingLeft: 18, marginTop: 0, color: "#374151" }}>
         {bullets.map((b) => (
           <li key={b} style={{ marginBottom: 6 }}>
@@ -556,28 +581,20 @@ function PricingCard({
   );
 }
 
-function buttonStyle(
-  variant: "primary" | "secondary" = "primary"
-): React.CSSProperties {
-  return {
-    padding: "12px 16px",
-    borderRadius: 10,
-    border: variant === "primary" ? "none" : "1px solid #d1d5db",
-    background: variant === "primary" ? "#7c3aed" : "white",
-    color: variant === "primary" ? "white" : "#111827",
-    fontWeight: 700,
-    cursor: "pointer",
-  };
-}
-
-function inputBox(): React.CSSProperties {
-  return {
-    width: "100%",
-    padding: 12,
-    borderRadius: 10,
-    border: "1px solid #d1d5db",
-    boxSizing: "border-box",
-  };
+function StatCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div
+      style={{
+        border: "1px solid #e5e7eb",
+        borderRadius: 12,
+        padding: 14,
+        background: "#f8fafc",
+      }}
+    >
+      <div style={{ color: "#6b7280", fontSize: 12 }}>{label}</div>
+      <div style={{ fontWeight: 900, fontSize: 24 }}>{value}</div>
+    </div>
+  );
 }
 
 function LeadCard({
@@ -697,9 +714,58 @@ function LeadCard({
   );
 }
 
+function PipelineColumn({
+  title,
+  bg,
+  leads,
+  onStatus,
+  onDelete,
+  onLoadReply,
+}: {
+  title: string;
+  bg: string;
+  leads: LeadRow[];
+  onStatus: (id: string, status: string) => void;
+  onDelete: (id: string) => void;
+  onLoadReply: (text: string) => void;
+}) {
+  return (
+    <div
+      style={{
+        background: bg,
+        border: "1px solid #e5e7eb",
+        borderRadius: 14,
+        padding: 12,
+        minHeight: 300,
+      }}
+    >
+      <div style={{ fontWeight: 900, marginBottom: 12 }}>{title}</div>
+      <div style={{ display: "grid", gap: 12 }}>
+        {leads.length === 0 ? (
+          <div style={{ color: "#6b7280" }}>No leads in this bucket.</div>
+        ) : (
+          leads.map((lead) => (
+            <LeadCard
+              key={lead.id}
+              lead={lead}
+              onStatus={onStatus}
+              onDelete={onDelete}
+              onLoadReply={onLoadReply}
+            />
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [session, setSession] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authMessage, setAuthMessage] = useState("");
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerName, setCustomerName] = useState("");
@@ -771,6 +837,54 @@ export default function App() {
       }));
       setLeads(mapped);
     }
+  }
+
+  async function handleSignUp() {
+    setAuthMessage("");
+    if (!authEmail || !authPassword) {
+      setAuthMessage("Enter email and password.");
+      return;
+    }
+
+    const result = await supabase.auth.signUp({
+      email: authEmail,
+      password: authPassword,
+      options: {
+        emailRedirectTo: "https://tradesman-ai-pro.vercel.app",
+      },
+    });
+
+    if (result.error) {
+      setAuthMessage(result.error.message);
+      return;
+    }
+
+    setAuthMessage("Account created. Check your email if confirmation is required.");
+  }
+
+  async function handleSignIn() {
+    setAuthMessage("");
+    if (!authEmail || !authPassword) {
+      setAuthMessage("Enter email and password.");
+      return;
+    }
+
+    const result = await supabase.auth.signInWithPassword({
+      email: authEmail,
+      password: authPassword,
+    });
+
+    if (result.error) {
+      setAuthMessage(result.error.message);
+      return;
+    }
+
+    setAuthMessage("Signed in.");
+  }
+
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+    setAuthMessage("");
   }
 
   async function addLead() {
@@ -883,7 +997,6 @@ export default function App() {
       cold: leads.filter((l) => scoreBucket(Number(l.score || 0)) === "Cold").length,
       won: leads.filter((l) => l.status === "won").length,
       quoted: leads.filter((l) => l.status === "quoted").length,
-      contacted: leads.filter((l) => l.status === "contacted").length,
     };
   }, [leads]);
 
@@ -959,8 +1072,243 @@ export default function App() {
 
   if (!session) {
     return (
-      <div style={{ padding: 32, fontFamily: "Arial, sans-serif" }}>
-        Sign in to use the lead inbox and save leads to your account.
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "#0f1724",
+          color: "#edf2f7",
+          fontFamily: "Arial, sans-serif",
+          padding: 24,
+        }}
+      >
+        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1.2fr 0.8fr",
+              gap: 24,
+              alignItems: "stretch",
+            }}
+          >
+            <div
+              style={{
+                background: "linear-gradient(180deg, #17202d, #111827)",
+                border: "1px solid #334155",
+                borderRadius: 22,
+                padding: 28,
+              }}
+            >
+              <div
+                style={{
+                  display: "inline-block",
+                  padding: "8px 12px",
+                  borderRadius: 999,
+                  background: "#241f3c",
+                  color: "#c4b5fd",
+                  fontWeight: 800,
+                  marginBottom: 18,
+                }}
+              >
+                AI Business Software for Contractors
+              </div>
+
+              <div
+                style={{
+                  fontSize: 48,
+                  fontWeight: 900,
+                  lineHeight: 1.05,
+                  marginBottom: 16,
+                }}
+              >
+                Quote jobs faster, score leads, and reply with AI.
+              </div>
+
+              <div
+                style={{
+                  color: "#a8b3c7",
+                  fontSize: 18,
+                  lineHeight: 1.6,
+                  marginBottom: 24,
+                }}
+              >
+                Tradesman AI helps contractors manage leads, build estimates,
+                translate messages, and respond faster.
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                  gap: 14,
+                }}
+              >
+                <LandingStat
+                  title="Lead Inbox"
+                  text="Paste incoming jobs, auto-score them, and track pipeline status."
+                />
+                <LandingStat
+                  title="Estimate Engine"
+                  text="Generate quote ranges and professional estimate text fast."
+                />
+                <LandingStat
+                  title="Translation Tools"
+                  text="Translate full output or selected text for real field use."
+                />
+              </div>
+            </div>
+
+            <div
+              style={{
+                background: "#17202d",
+                border: "1px solid #334155",
+                borderRadius: 22,
+                padding: 24,
+              }}
+            >
+              <div style={{ fontSize: 34, fontWeight: 900, marginBottom: 8 }}>
+                Tradesman AI
+              </div>
+              <div style={{ color: "#a8b3c7", marginBottom: 16 }}>
+                Sign in or create your account.
+              </div>
+
+              <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+                <button
+                  onClick={() => setAuthMode("signin")}
+                  style={{
+                    flex: 1,
+                    padding: "12px 14px",
+                    borderRadius: 12,
+                    border: "1px solid #334155",
+                    background: authMode === "signin" ? "#9b87f5" : "#1d2939",
+                    color: "white",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                  }}
+                >
+                  Sign In
+                </button>
+                <button
+                  onClick={() => setAuthMode("signup")}
+                  style={{
+                    flex: 1,
+                    padding: "12px 14px",
+                    borderRadius: 12,
+                    border: "1px solid #334155",
+                    background: authMode === "signup" ? "#9b87f5" : "#1d2939",
+                    color: "white",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                  }}
+                >
+                  Sign Up
+                </button>
+              </div>
+
+              <div style={{ display: "grid", gap: 12 }}>
+                <input
+                  type="email"
+                  placeholder="Email"
+                  value={authEmail}
+                  onChange={(e) => setAuthEmail(e.target.value)}
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    background: "#0f1724",
+                    color: "#edf2f7",
+                    border: "1px solid #334155",
+                    borderRadius: 10,
+                    padding: "12px 12px",
+                    outline: "none",
+                  }}
+                />
+                <input
+                  type="password"
+                  placeholder="Password"
+                  value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)}
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    background: "#0f1724",
+                    color: "#edf2f7",
+                    border: "1px solid #334155",
+                    borderRadius: 10,
+                    padding: "12px 12px",
+                    outline: "none",
+                  }}
+                />
+              </div>
+
+              <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
+                {authMode === "signin" ? (
+                  <button
+                    onClick={handleSignIn}
+                    style={{
+                      background: "#9b87f5",
+                      color: "white",
+                      border: "none",
+                      borderRadius: 12,
+                      padding: "13px 18px",
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      width: "100%",
+                    }}
+                  >
+                    Sign In
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleSignUp}
+                    style={{
+                      background: "#9b87f5",
+                      color: "white",
+                      border: "none",
+                      borderRadius: 12,
+                      padding: "13px 18px",
+                      fontWeight: 800,
+                      cursor: "pointer",
+                      width: "100%",
+                    }}
+                  >
+                    Create Account
+                  </button>
+                )}
+              </div>
+
+              <div style={{ color: "#a8b3c7", marginTop: 14, minHeight: 24 }}>
+                {authMessage}
+              </div>
+
+              <div
+                style={{
+                  marginTop: 22,
+                  padding: 16,
+                  border: "1px solid #334155",
+                  borderRadius: 14,
+                  background: "#111827",
+                }}
+              >
+                <div style={{ fontWeight: 800, marginBottom: 10 }}>Pricing</div>
+                <div style={{ color: "#a8b3c7", lineHeight: 1.7 }}>
+                  <strong>Basic — $19/mo</strong>
+                  <br />
+                  CRM, estimates, translations
+                  <br />
+                  <br />
+                  <strong>Pro — $49/mo</strong>
+                  <br />
+                  Lead inbox, AI replies, quote ranges
+                  <br />
+                  <br />
+                  <strong>Team — $99/mo</strong>
+                  <br />
+                  Team workflow foundation
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -975,17 +1323,33 @@ export default function App() {
         color: "#111827",
       }}
     >
-      <h1 style={{ marginBottom: 8 }}>Tradesman AI</h1>
-      <p style={{ color: "#4b5563", marginTop: 0 }}>
-        Estimate engine, translation tools, lead inbox, and AI response helper.
-      </p>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 12,
+          alignItems: "center",
+          flexWrap: "wrap",
+          marginBottom: 20,
+        }}
+      >
+        <div>
+          <h1 style={{ marginBottom: 8 }}>Tradesman AI</h1>
+          <p style={{ color: "#4b5563", marginTop: 0 }}>
+            Signed in as {session.user?.email || "user"}
+          </p>
+        </div>
+        <button onClick={handleSignOut} style={buttonStyle("secondary")}>
+          Sign Out
+        </button>
+      </div>
 
       <div
         style={{
           display: "grid",
           gridTemplateColumns: "1fr 1fr",
           gap: 24,
-          marginTop: 28,
+          marginTop: 8,
           marginBottom: 36,
         }}
       >
@@ -1073,7 +1437,7 @@ export default function App() {
                 "Customer manager",
                 "Job notes",
                 "Estimate output",
-                "PDF/export workflow",
+                "Translation tools",
               ]}
               buttonText="Subscribe"
               onClick={() => window.open(BASIC_STRIPE_LINK, "_blank")}
@@ -1084,9 +1448,9 @@ export default function App() {
               price="$49/mo"
               bullets={[
                 "Everything in Basic",
-                "AI estimate engine",
                 "Lead inbox",
-                "Translate workflow",
+                "AI lead reply",
+                "Quote range engine",
               ]}
               buttonText="Upgrade"
               onClick={() => window.open(PRO_STRIPE_LINK, "_blank")}
@@ -1339,7 +1703,7 @@ export default function App() {
         <textarea
           value={leadDescription}
           onChange={(e) => setLeadDescription(e.target.value)}
-          placeholder="Paste the lead text here. Example: Need 20x30 shop pad, gravel driveway, and brush clearing in Scottsbluff. Need quote ASAP. Budget around $4,000. Call 308-555-1111."
+          placeholder="Paste the lead text here."
           style={{
             width: "100%",
             minHeight: 110,
@@ -1487,63 +1851,18 @@ export default function App() {
   );
 }
 
-function StatCard({ label, value }: { label: string; value: string }) {
+function LandingStat({ title, text }: { title: string; text: string }) {
   return (
     <div
       style={{
-        border: "1px solid #e5e7eb",
-        borderRadius: 12,
-        padding: 14,
-        background: "#f8fafc",
+        background: "#111827",
+        border: "1px solid #334155",
+        borderRadius: 16,
+        padding: 16,
       }}
     >
-      <div style={{ color: "#6b7280", fontSize: 12 }}>{label}</div>
-      <div style={{ fontWeight: 900, fontSize: 24 }}>{value}</div>
-    </div>
-  );
-}
-
-function PipelineColumn({
-  title,
-  bg,
-  leads,
-  onStatus,
-  onDelete,
-  onLoadReply,
-}: {
-  title: string;
-  bg: string;
-  leads: LeadRow[];
-  onStatus: (id: string, status: string) => void;
-  onDelete: (id: string) => void;
-  onLoadReply: (text: string) => void;
-}) {
-  return (
-    <div
-      style={{
-        background: bg,
-        border: "1px solid #e5e7eb",
-        borderRadius: 14,
-        padding: 12,
-        minHeight: 300,
-      }}
-    >
-      <div style={{ fontWeight: 900, marginBottom: 12 }}>{title}</div>
-      <div style={{ display: "grid", gap: 12 }}>
-        {leads.length === 0 ? (
-          <div style={{ color: "#6b7280" }}>No leads in this bucket.</div>
-        ) : (
-          leads.map((lead) => (
-            <LeadCard
-              key={lead.id}
-              lead={lead}
-              onStatus={onStatus}
-              onDelete={onDelete}
-              onLoadReply={onLoadReply}
-            />
-          ))
-        )}
-      </div>
+      <div style={{ fontWeight: 900, marginBottom: 8 }}>{title}</div>
+      <div style={{ color: "#a8b3c7", lineHeight: 1.6 }}>{text}</div>
     </div>
   );
 }
