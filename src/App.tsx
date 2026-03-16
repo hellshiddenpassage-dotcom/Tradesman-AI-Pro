@@ -1,7 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const BASIC_STRIPE_LINK = "https://buy.stripe.com/eVqdR26372Cb7BW8Y5d7q03";
 const PRO_STRIPE_LINK = "https://buy.stripe.com/dRmfZa3UZa4D7BWgqxd7q04";
+
+const SUPABASE_URL = "https://ljizlaabarhyzocfcsba.supabase.co";
+const SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqaXpsYWFiYXJoeXpvY2Zjc2JhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1ODcxNTIsImV4cCI6MjA4OTE2MzE1Mn0.eJstZOcLE_BALH1JMhju4zQonRxMQwk5DbEXpYUIKbw";
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 type ThemeMode = "dark" | "light";
 type Plan = "basic" | "pro";
@@ -28,8 +35,6 @@ type CompanySettings = {
   mobilizationDefault: number;
   dumpFeesDefault: number;
   currency: string;
-  dashboardLanguage: string;
-  documentLanguage: string;
 };
 
 type Customer = {
@@ -122,11 +127,11 @@ type AiBuilderForm = {
   prompt: string;
 };
 
-const SETTINGS_KEY = "tradesman_ai_company_settings_v6_fixed";
-const THEME_KEY = "tradesman_ai_theme_v6_fixed";
-const PLAN_KEY = "tradesman_ai_plan_v6_fixed";
-const CUSTOMERS_KEY = "tradesman_ai_customers_v6_fixed";
-const DOCS_KEY = "tradesman_ai_saved_docs_v6_fixed";
+const SETTINGS_KEY = "tradesman_ai_company_settings_v7";
+const THEME_KEY = "tradesman_ai_theme_v7";
+const PLAN_KEY = "tradesman_ai_plan_v7";
+const CUSTOMERS_KEY = "tradesman_ai_customers_v7";
+const DOCS_KEY = "tradesman_ai_saved_docs_v7";
 
 const defaultSettings: CompanySettings = {
   companyName: "Your Company",
@@ -139,8 +144,6 @@ const defaultSettings: CompanySettings = {
   mobilizationDefault: 150,
   dumpFeesDefault: 0,
   currency: "USD",
-  dashboardLanguage: "English",
-  documentLanguage: "English",
 };
 
 function getInitialSettings(): CompanySettings {
@@ -193,6 +196,13 @@ function uid() {
 }
 
 export default function App() {
+  const [session, setSession] = useState<any>(null);
+  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authMessage, setAuthMessage] = useState("");
+  const [authLoading, setAuthLoading] = useState(true);
+
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
   const [plan, setPlan] = useState<Plan>(getInitialPlan);
   const [tool, setTool] = useState<Tool>("dashboard");
@@ -301,6 +311,29 @@ export default function App() {
   });
 
   useEffect(() => {
+    let mounted = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (mounted) {
+        setSession(data.session);
+        setAuthLoading(false);
+      }
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      setAuthLoading(false);
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   }, [settings]);
 
@@ -334,6 +367,7 @@ export default function App() {
         outputBg: "#f8fafc",
         inputBg: "#ffffff",
         danger: "#b42318",
+        success: "#067647",
       };
     }
 
@@ -349,6 +383,7 @@ export default function App() {
       outputBg: "#111827",
       inputBg: "#0f1724",
       danger: "#ef4444",
+      success: "#22c55e",
     };
   }, [theme]);
 
@@ -390,6 +425,54 @@ export default function App() {
 
   function num(value: number) {
     return Number.isFinite(value) ? value.toFixed(2) : "0.00";
+  }
+
+  async function handleSignUp() {
+    setAuthMessage("");
+    if (!authEmail || !authPassword) {
+      setAuthMessage("Enter email and password.");
+      return;
+    }
+
+    const { error } = await supabase.auth.signUp({
+      email: authEmail,
+      password: authPassword,
+      options: {
+        emailRedirectTo: "https://tradesman-ai-pro.vercel.app",
+      },
+    });
+
+    if (error) {
+      setAuthMessage(error.message);
+      return;
+    }
+
+    setAuthMessage("Account created. Check your email to confirm if prompted.");
+  }
+
+  async function handleSignIn() {
+    setAuthMessage("");
+    if (!authEmail || !authPassword) {
+      setAuthMessage("Enter email and password.");
+      return;
+    }
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: authEmail,
+      password: authPassword,
+    });
+
+    if (error) {
+      setAuthMessage(error.message);
+      return;
+    }
+
+    setAuthMessage("Signed in.");
+  }
+
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+    setAuthMessage("");
   }
 
   function exportPDF() {
@@ -891,6 +974,123 @@ LIKELY CAUSE AREAS
     };
   }
 
+  if (authLoading) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "grid",
+          placeItems: "center",
+          background: "#0f1724",
+          color: "white",
+          fontFamily: "Inter, Arial, sans-serif",
+        }}
+      >
+        Loading...
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          background: "#0f1724",
+          color: "#edf2f7",
+          fontFamily: "Inter, Arial, sans-serif",
+          display: "grid",
+          placeItems: "center",
+          padding: 20,
+        }}
+      >
+        <div
+          style={{
+            width: "100%",
+            maxWidth: 460,
+            background: "#17202d",
+            border: "1px solid #334155",
+            borderRadius: 18,
+            padding: 24,
+          }}
+        >
+          <div style={{ fontSize: 34, fontWeight: 900, marginBottom: 8 }}>
+            Tradesman AI
+          </div>
+          <div style={{ color: "#a8b3c7", marginBottom: 20 }}>
+            Sign in or create your account.
+          </div>
+
+          <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+            <button
+              onClick={() => setAuthMode("signin")}
+              style={{
+                flex: 1,
+                padding: "12px 14px",
+                borderRadius: 12,
+                border: "1px solid #334155",
+                background: authMode === "signin" ? "#9b87f5" : "#1d2939",
+                color: "white",
+                fontWeight: 800,
+                cursor: "pointer",
+              }}
+            >
+              Sign In
+            </button>
+            <button
+              onClick={() => setAuthMode("signup")}
+              style={{
+                flex: 1,
+                padding: "12px 14px",
+                borderRadius: 12,
+                border: "1px solid #334155",
+                background: authMode === "signup" ? "#9b87f5" : "#1d2939",
+                color: "white",
+                fontWeight: 800,
+                cursor: "pointer",
+              }}
+            >
+              Sign Up
+            </button>
+          </div>
+
+          <div style={{ display: "grid", gap: 12 }}>
+            <input
+              type="email"
+              placeholder="Email"
+              value={authEmail}
+              onChange={(e) => setAuthEmail(e.target.value)}
+              style={authInputStyle()}
+            />
+            <input
+              type="password"
+              placeholder="Password"
+              value={authPassword}
+              onChange={(e) => setAuthPassword(e.target.value)}
+              style={authInputStyle()}
+            />
+          </div>
+
+          <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
+            {authMode === "signin" ? (
+              <button onClick={handleSignIn} style={authPrimaryBtn()}>
+                Sign In
+              </button>
+            ) : (
+              <button onClick={handleSignUp} style={authPrimaryBtn()}>
+                Create Account
+              </button>
+            )}
+          </div>
+
+          <div style={{ color: "#a8b3c7", marginTop: 14, minHeight: 24 }}>
+            {authMessage}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       style={{
@@ -919,16 +1119,21 @@ LIKELY CAUSE AREAS
           <div>
             <div style={{ fontSize: 32, fontWeight: 900 }}>Tradesman AI</div>
             <div style={{ color: colors.muted, marginTop: 6 }}>
-              AI builder, saved customers, saved jobs, pro troubleshooting, and contractor documents.
+              Signed in as {session.user?.email || "user"}
             </div>
           </div>
 
-          <button
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            style={secondaryBtn(colors)}
-          >
-            Switch to {theme === "dark" ? "Light" : "Dark"} Theme
-          </button>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              style={secondaryBtn(colors)}
+            >
+              Switch to {theme === "dark" ? "Light" : "Dark"} Theme
+            </button>
+            <button onClick={handleSignOut} style={dangerBtn(colors)}>
+              Sign Out
+            </button>
+          </div>
         </div>
 
         <div
@@ -1149,12 +1354,7 @@ LIKELY CAUSE AREAS
                   <Field label="Customer Name" value={aiBuilder.customerName} onChange={(v) => setAiBuilder({ ...aiBuilder, customerName: v })} colors={colors} />
                   <Field label="Project Type" value={aiBuilder.projectType} onChange={(v) => setAiBuilder({ ...aiBuilder, projectType: v })} colors={colors} />
                 </Grid>
-                <Area
-                  label="Describe the job in plain English"
-                  value={aiBuilder.prompt}
-                  onChange={(v) => setAiBuilder({ ...aiBuilder, prompt: v })}
-                  colors={colors}
-                />
+                <Area label="Describe the job in plain English" value={aiBuilder.prompt} onChange={(v) => setAiBuilder({ ...aiBuilder, prompt: v })} colors={colors} />
                 <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
                   <button onClick={aiBuildEstimate} style={primaryBtn(colors)}>
                     AI Build Estimate
@@ -1493,5 +1693,31 @@ function dangerBtn(colors?: any): React.CSSProperties {
     padding: "0 12px",
     fontWeight: 800,
     cursor: "pointer",
+  };
+}
+
+function authInputStyle(): React.CSSProperties {
+  return {
+    width: "100%",
+    boxSizing: "border-box",
+    background: "#0f1724",
+    color: "#edf2f7",
+    border: "1px solid #334155",
+    borderRadius: 10,
+    padding: "12px 12px",
+    outline: "none",
+  };
+}
+
+function authPrimaryBtn(): React.CSSProperties {
+  return {
+    background: "#9b87f5",
+    color: "white",
+    border: "none",
+    borderRadius: 12,
+    padding: "13px 18px",
+    fontWeight: 800,
+    cursor: "pointer",
+    width: "100%",
   };
 }
