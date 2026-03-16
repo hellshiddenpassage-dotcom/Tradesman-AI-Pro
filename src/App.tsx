@@ -91,9 +91,9 @@ type TroubleForm = {
   severity: string;
 };
 
-const SETTINGS_KEY = "tradesman_ai_company_settings_v2";
-const THEME_KEY = "tradesman_ai_theme_v2";
-const PLAN_KEY = "tradesman_ai_plan_v2";
+const SETTINGS_KEY = "tradesman_ai_company_settings_v3";
+const THEME_KEY = "tradesman_ai_theme_v3";
+const PLAN_KEY = "tradesman_ai_plan_v3";
 
 const defaultSettings: CompanySettings = {
   companyName: "Your Company",
@@ -141,9 +141,7 @@ export default function App() {
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
   const [plan, setPlan] = useState<Plan>(getInitialPlan);
   const [tool, setTool] = useState<Tool>("dashboard");
-  const [output, setOutput] = useState(
-    "Your generated output will appear here."
-  );
+  const [output, setOutput] = useState("Your generated output will appear here.");
 
   const [settings, setSettings] = useState<CompanySettings>(getInitialSettings);
 
@@ -252,7 +250,6 @@ export default function App() {
         outputBg: "#f8fafc",
         inputBg: "#ffffff",
         danger: "#b42318",
-        success: "#067647",
       };
     }
 
@@ -268,7 +265,6 @@ export default function App() {
       outputBg: "#111827",
       inputBg: "#0f1724",
       danger: "#ef4444",
-      success: "#22c55e",
     };
   }, [theme]);
 
@@ -310,6 +306,23 @@ export default function App() {
 
   function num(value: number) {
     return Number.isFinite(value) ? value.toFixed(2) : "0.00";
+  }
+
+  function exportPDF() {
+    const jspdfLib = (window as any).jspdf;
+    if (!jspdfLib?.jsPDF) {
+      alert("PDF library did not load.");
+      return;
+    }
+
+    const { jsPDF } = jspdfLib;
+    const doc = new jsPDF();
+
+    const text = output || "No output generated yet.";
+    const lines = doc.splitTextToSize(text, 180);
+
+    doc.text(lines, 10, 10);
+    doc.save("TradesmanAI_Document.pdf");
   }
 
   function applySettingsToForms() {
@@ -1355,6 +1368,9 @@ Start with electrical and fluid checks before replacing parts. Confirm whether t
                 <button onClick={copyOutput} style={secondaryBtn(colors)}>
                   Copy Output
                 </button>
+                <button onClick={exportPDF} style={secondaryBtn(colors)}>
+                  Export PDF
+                </button>
               </div>
             )}
 
@@ -1374,12 +1390,18 @@ Start with electrical and fluid checks before replacing parts. Confirm whether t
                   gap: 12,
                   alignItems: "center",
                   marginBottom: 14,
+                  flexWrap: "wrap",
                 }}
               >
                 <div style={{ fontSize: 18, fontWeight: 800 }}>Generated Output</div>
-                <button onClick={copyOutput} style={secondaryBtn(colors)}>
-                  Copy
-                </button>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <button onClick={copyOutput} style={secondaryBtn(colors)}>
+                    Copy
+                  </button>
+                  <button onClick={exportPDF} style={secondaryBtn(colors)}>
+                    Export PDF
+                  </button>
+                </div>
               </div>
 
               <div
