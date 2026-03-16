@@ -122,11 +122,11 @@ type AiBuilderForm = {
   prompt: string;
 };
 
-const SETTINGS_KEY = "tradesman_ai_company_settings_v6";
-const THEME_KEY = "tradesman_ai_theme_v6";
-const PLAN_KEY = "tradesman_ai_plan_v6";
-const CUSTOMERS_KEY = "tradesman_ai_customers_v6";
-const DOCS_KEY = "tradesman_ai_saved_docs_v6";
+const SETTINGS_KEY = "tradesman_ai_company_settings_v6_fixed";
+const THEME_KEY = "tradesman_ai_theme_v6_fixed";
+const PLAN_KEY = "tradesman_ai_plan_v6_fixed";
+const CUSTOMERS_KEY = "tradesman_ai_customers_v6_fixed";
+const DOCS_KEY = "tradesman_ai_saved_docs_v6_fixed";
 
 const defaultSettings: CompanySettings = {
   companyName: "Your Company",
@@ -402,17 +402,9 @@ export default function App() {
     const { jsPDF } = jspdfLib;
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
+    let y = 18;
     const left = 14;
     const right = pageWidth - 14;
-    let y = 18;
-
-    const ensurePage = (needed = 10) => {
-      if (y + needed > pageHeight - 16) {
-        doc.addPage();
-        y = 18;
-      }
-    };
 
     const addHeader = (title: string, subtitle?: string) => {
       doc.setFillColor(23, 32, 45);
@@ -436,41 +428,15 @@ export default function App() {
       y = 40;
     };
 
-    const addSection = (title: string) => {
-      ensurePage(12);
-      doc.setFillColor(239, 231, 255);
-      doc.rect(left, y - 5, right - left, 8, "F");
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(11);
-      doc.setTextColor(60, 60, 60);
-      doc.text(title, left + 2, y);
-      doc.setTextColor(33, 37, 41);
-      y += 10;
-    };
-
     const addTextBlock = (text: string) => {
-      const lines = doc.splitTextToSize(text || "", right - left);
+      const lines = doc.splitTextToSize(text || "", 180);
       doc.setFont("helvetica", "normal");
       doc.setFontSize(10);
-      lines.forEach((line: string) => {
-        ensurePage(6);
-        doc.text(line, left, y);
-        y += 5;
-      });
-      y += 2;
+      doc.text(lines, left, y);
     };
 
-    if (tool === "saved") {
-      addHeader("Saved Document");
-      addTextBlock(output);
-      doc.save("TradesmanAI_SavedDocument.pdf");
-      return;
-    }
-
-    const lines = doc.splitTextToSize(output || "No output generated yet.", 180);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.text(lines, 14, 20);
+    addHeader("Tradesman AI Document", new Date().toLocaleDateString());
+    addTextBlock(output || "No output generated yet.");
     doc.save("TradesmanAI_Document.pdf");
   }
 
@@ -1133,19 +1099,23 @@ LIKELY CAUSE AREAS
                 </div>
 
                 <div style={{ display: "grid", gap: 12 }}>
-                  {customers.map((c) => (
-                    <div key={c.id} style={{ background: colors.outputBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 14 }}>
-                      <div style={{ fontWeight: 800 }}>{c.name}</div>
-                      <div style={{ color: colors.muted, marginTop: 4 }}>
-                        {c.company || "-"} | {c.phone || "-"} | {c.email || "-"}
+                  {customers.length === 0 ? (
+                    <div style={{ color: colors.muted }}>No customers yet.</div>
+                  ) : (
+                    customers.map((c) => (
+                      <div key={c.id} style={{ background: colors.outputBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 14 }}>
+                        <div style={{ fontWeight: 800 }}>{c.name}</div>
+                        <div style={{ color: colors.muted, marginTop: 4 }}>
+                          {c.company || "-"} | {c.phone || "-"} | {c.email || "-"}
+                        </div>
+                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
+                          <button onClick={() => useCustomer(c.name)} style={secondaryBtn(colors)}>Use in Forms</button>
+                          <button onClick={() => editCustomer(c)} style={secondaryBtn(colors)}>Edit</button>
+                          <button onClick={() => deleteCustomer(c.id)} style={dangerBtn(colors)}>Delete</button>
+                        </div>
                       </div>
-                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
-                        <button onClick={() => useCustomer(c.name)} style={secondaryBtn(colors)}>Use in Forms</button>
-                        <button onClick={() => editCustomer(c)} style={secondaryBtn(colors)}>Edit</button>
-                        <button onClick={() => deleteCustomer(c.id)} style={dangerBtn(colors)}>Delete</button>
-                      </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </Card>
             )}
@@ -1180,7 +1150,7 @@ LIKELY CAUSE AREAS
                   <Field label="Project Type" value={aiBuilder.projectType} onChange={(v) => setAiBuilder({ ...aiBuilder, projectType: v })} colors={colors} />
                 </Grid>
                 <Area
-                  label='Describe the job in plain English'
+                  label="Describe the job in plain English"
                   value={aiBuilder.prompt}
                   onChange={(v) => setAiBuilder({ ...aiBuilder, prompt: v })}
                   colors={colors}
