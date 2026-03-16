@@ -160,8 +160,8 @@ type AiBuilderForm = {
   prompt: string;
 };
 
-const SETTINGS_KEY = "tradesman_ai_company_settings_v13";
-const THEME_KEY = "tradesman_ai_theme_v13";
+const SETTINGS_KEY = "tradesman_ai_company_settings_v14";
+const THEME_KEY = "tradesman_ai_theme_v14";
 
 const defaultSettings: CompanySettings = {
   companyName: "Your Company",
@@ -555,41 +555,46 @@ export default function App() {
   }
 
   async function loadCloudData(userId: string) {
-    const [customersResult, docsResult, estimatesResult, invoicesResult] = await Promise.all([
-      supabase
-        .from("customers")
-        .select("id,name,company,phone,email,address,notes,created_at")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("saved_docs")
-        .select("id,type,title,customer_name,content,created_at")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("estimates")
-        .select("id,customer_id,job_description,ai_price,ai_labor,ai_material,status,created_at")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("invoices")
-        .select("id,customer_id,invoice_number,job_name,total,status,created_at")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false }),
-    ]);
+    const [customersResult, docsResult, estimatesResult, invoicesResult] =
+      await Promise.all([
+        supabase
+          .from("customers")
+          .select("id,name,company,phone,email,address,notes,created_at")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("saved_docs")
+          .select("id,type,title,customer_name,content,created_at")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("estimates")
+          .select(
+            "id,customer_id,job_description,ai_price,ai_labor,ai_material,status,created_at"
+          )
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("invoices")
+          .select("id,customer_id,invoice_number,job_name,total,status,created_at")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false }),
+      ]);
 
-    let customerNameMap = new Map<string, string>();
+    const customerNameMap = new Map<string, string>();
 
     if (!customersResult.error) {
-      const mappedCustomers: Customer[] = (customersResult.data || []).map((row: any) => ({
-        id: row.id,
-        name: row.name || "",
-        company: row.company || "",
-        phone: row.phone || "",
-        email: row.email || "",
-        address: row.address || "",
-        notes: row.notes || "",
-      }));
+      const mappedCustomers: Customer[] = (customersResult.data || []).map(
+        (row: any) => ({
+          id: row.id,
+          name: row.name || "",
+          company: row.company || "",
+          phone: row.phone || "",
+          email: row.email || "",
+          address: row.address || "",
+          notes: row.notes || "",
+        })
+      );
       setCustomers(mappedCustomers);
       mappedCustomers.forEach((c) => customerNameMap.set(c.id, c.name));
     }
@@ -601,37 +606,49 @@ export default function App() {
         title: row.title || "",
         customerName: row.customer_name || "",
         content: row.content || "",
-        createdAt: row.created_at ? new Date(row.created_at).toLocaleString() : "",
+        createdAt: row.created_at
+          ? new Date(row.created_at).toLocaleString()
+          : "",
       }));
       setSavedDocs(mappedDocs);
     }
 
     if (!estimatesResult.error) {
-      const mappedEstimates: EstimateRow[] = (estimatesResult.data || []).map((row: any) => ({
-        id: row.id,
-        customerId: row.customer_id || "",
-        customerName: customerNameMap.get(row.customer_id || "") || "No customer",
-        jobDescription: row.job_description || "",
-        aiPrice: Number(row.ai_price || 0),
-        aiLabor: Number(row.ai_labor || 0),
-        aiMaterial: Number(row.ai_material || 0),
-        status: (row.status || "draft") as EstimateStatus,
-        createdAt: row.created_at ? new Date(row.created_at).toLocaleString() : "",
-      }));
+      const mappedEstimates: EstimateRow[] = (estimatesResult.data || []).map(
+        (row: any) => ({
+          id: row.id,
+          customerId: row.customer_id || "",
+          customerName:
+            customerNameMap.get(row.customer_id || "") || "No customer",
+          jobDescription: row.job_description || "",
+          aiPrice: Number(row.ai_price || 0),
+          aiLabor: Number(row.ai_labor || 0),
+          aiMaterial: Number(row.ai_material || 0),
+          status: (row.status || "draft") as EstimateStatus,
+          createdAt: row.created_at
+            ? new Date(row.created_at).toLocaleString()
+            : "",
+        })
+      );
       setEstimates(mappedEstimates);
     }
 
     if (!invoicesResult.error) {
-      const mappedInvoices: InvoiceRow[] = (invoicesResult.data || []).map((row: any) => ({
-        id: row.id,
-        customerId: row.customer_id || "",
-        customerName: customerNameMap.get(row.customer_id || "") || "No customer",
-        invoiceNumber: row.invoice_number || "",
-        jobName: row.job_name || "",
-        total: Number(row.total || 0),
-        status: (row.status || "unpaid") as InvoiceStatus,
-        createdAt: row.created_at ? new Date(row.created_at).toLocaleString() : "",
-      }));
+      const mappedInvoices: InvoiceRow[] = (invoicesResult.data || []).map(
+        (row: any) => ({
+          id: row.id,
+          customerId: row.customer_id || "",
+          customerName:
+            customerNameMap.get(row.customer_id || "") || "No customer",
+          invoiceNumber: row.invoice_number || "",
+          jobName: row.job_name || "",
+          total: Number(row.total || 0),
+          status: (row.status || "unpaid") as InvoiceStatus,
+          createdAt: row.created_at
+            ? new Date(row.created_at).toLocaleString()
+            : "",
+        })
+      );
       setInvoices(mappedInvoices);
     }
   }
@@ -701,7 +718,9 @@ export default function App() {
   }, [estimate]);
 
   const aiPricing = useMemo(() => {
-    return generateAIPrice(estimate.aiJobDescription || estimate.notes || estimate.jobType);
+    return generateAIPrice(
+      estimate.aiJobDescription || estimate.notes || estimate.jobType
+    );
   }, [estimate.aiJobDescription, estimate.notes, estimate.jobType]);
 
   const dashboardStats = useMemo(() => {
@@ -804,10 +823,6 @@ export default function App() {
 
   function isPro() {
     return profilePlan === "pro" || profilePlan === "team" || demoMode;
-  }
-
-  function isTeam() {
-    return profilePlan === "team";
   }
 
   function exportPDF() {
@@ -1590,16 +1605,37 @@ LIKELY CAUSE AREAS
                 AI Business Software for Contractors
               </div>
 
-              <div style={{ fontSize: 52, fontWeight: 900, lineHeight: 1.05, marginBottom: 16 }}>
+              <div
+                style={{
+                  fontSize: 52,
+                  fontWeight: 900,
+                  lineHeight: 1.05,
+                  marginBottom: 16,
+                }}
+              >
                 Build estimates, track jobs, and manage customers faster.
               </div>
 
-              <div style={{ color: "#a8b3c7", fontSize: 18, lineHeight: 1.6, marginBottom: 24 }}>
-                Tradesman AI helps contractors, mechanics, and service businesses run estimates,
-                invoices, customers, and workflow in one place.
+              <div
+                style={{
+                  color: "#a8b3c7",
+                  fontSize: 18,
+                  lineHeight: 1.6,
+                  marginBottom: 24,
+                }}
+              >
+                Tradesman AI helps contractors, mechanics, and service businesses
+                run estimates, invoices, customers, and workflow in one place.
               </div>
 
-              <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 28 }}>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 12,
+                  flexWrap: "wrap",
+                  marginBottom: 28,
+                }}
+              >
                 <button onClick={startDemo} style={landingPrimaryBtn()}>
                   Try Demo
                 </button>
@@ -1621,9 +1657,18 @@ LIKELY CAUSE AREAS
                   gap: 14,
                 }}
               >
-                <LandingStat title="Save Time" text="Generate estimates, invoices, scopes, and contracts in minutes." />
-                <LandingStat title="Manage Work" text="Track customers, jobs, estimate history, and invoice history." />
-                <LandingStat title="Grow Revenue" text="Use AI pricing and workflow tools to quote faster and close more jobs." />
+                <LandingStat
+                  title="Save Time"
+                  text="Generate estimates, invoices, scopes, and contracts in minutes."
+                />
+                <LandingStat
+                  title="Manage Work"
+                  text="Track customers, jobs, estimate history, and invoice history."
+                />
+                <LandingStat
+                  title="Grow Revenue"
+                  text="Use AI pricing and workflow tools to quote faster and close more jobs."
+                />
               </div>
             </div>
 
@@ -1636,7 +1681,9 @@ LIKELY CAUSE AREAS
                 padding: 24,
               }}
             >
-              <div style={{ fontSize: 34, fontWeight: 900, marginBottom: 8 }}>Tradesman AI</div>
+              <div style={{ fontSize: 34, fontWeight: 900, marginBottom: 8 }}>
+                Tradesman AI
+              </div>
               <div style={{ color: "#a8b3c7", marginBottom: 16 }}>
                 Sign in or create your account.
               </div>
@@ -1879,7 +1926,9 @@ LIKELY CAUSE AREAS
                 "Business-level positioning",
               ]}
               buttonLabel="Team Coming Soon"
-              buttonAction={() => setOutput("Team billing will be wired in Round B.")}
+              buttonAction={() =>
+                setOutput("Team billing will be wired in Round B.")
+              }
             />
           </div>
         </div>
@@ -1899,22 +1948,89 @@ LIKELY CAUSE AREAS
                 Tools
               </div>
 
-              <button style={toolBtnStyle(tool === "dashboard")} onClick={() => setTool("dashboard")}>Dashboard</button>
-              <button style={toolBtnStyle(tool === "settings")} onClick={() => setTool("settings")}>Company Settings</button>
-              <button style={toolBtnStyle(tool === "customers")} onClick={() => setTool("customers")}>Customers</button>
-              <button style={toolBtnStyle(tool === "customerDetail")} onClick={() => setTool("customerDetail")}>Customer Timeline</button>
-              <button style={toolBtnStyle(tool === "estimate")} onClick={() => setTool("estimate")}>Estimate Generator</button>
-              <button style={toolBtnStyle(tool === "estimates")} onClick={() => setTool("estimates")}>Estimate History</button>
-              <button style={toolBtnStyle(tool === "invoice")} onClick={() => setTool("invoice")}>Invoice Builder</button>
-              <button style={toolBtnStyle(tool === "invoices")} onClick={() => setTool("invoices")}>Invoice History</button>
-              <button style={toolBtnStyle(tool === "saved")} onClick={() => setTool("saved")}>Saved Docs</button>
-              <button style={toolBtnStyle(tool === "aiBuilder", !isPro())} onClick={() => setTool("aiBuilder")}>AI Quick Builder (Pro+)</button>
-              <button style={toolBtnStyle(tool === "scope")} onClick={() => setTool("scope")}>Scope Writer</button>
-              <button style={toolBtnStyle(tool === "contract")} onClick={() => setTool("contract")}>Contract Builder</button>
-              <button style={toolBtnStyle(tool === "troubleshoot", !isPro())} onClick={() => setTool("troubleshoot")}>Troubleshooting (Pro+)</button>
+              <button
+                style={toolBtnStyle(tool === "dashboard")}
+                onClick={() => setTool("dashboard")}
+              >
+                Dashboard
+              </button>
+              <button
+                style={toolBtnStyle(tool === "settings")}
+                onClick={() => setTool("settings")}
+              >
+                Company Settings
+              </button>
+              <button
+                style={toolBtnStyle(tool === "customers")}
+                onClick={() => setTool("customers")}
+              >
+                Customers
+              </button>
+              <button
+                style={toolBtnStyle(tool === "customerDetail")}
+                onClick={() => setTool("customerDetail")}
+              >
+                Customer Timeline
+              </button>
+              <button
+                style={toolBtnStyle(tool === "estimate")}
+                onClick={() => setTool("estimate")}
+              >
+                Estimate Generator
+              </button>
+              <button
+                style={toolBtnStyle(tool === "estimates")}
+                onClick={() => setTool("estimates")}
+              >
+                Estimate History
+              </button>
+              <button
+                style={toolBtnStyle(tool === "invoice")}
+                onClick={() => setTool("invoice")}
+              >
+                Invoice Builder
+              </button>
+              <button
+                style={toolBtnStyle(tool === "invoices")}
+                onClick={() => setTool("invoices")}
+              >
+                Invoice History
+              </button>
+              <button
+                style={toolBtnStyle(tool === "saved")}
+                onClick={() => setTool("saved")}
+              >
+                Saved Docs
+              </button>
+              <button
+                style={toolBtnStyle(tool === "aiBuilder", !isPro())}
+                onClick={() => setTool("aiBuilder")}
+              >
+                AI Quick Builder (Pro+)
+              </button>
+              <button
+                style={toolBtnStyle(tool === "scope")}
+                onClick={() => setTool("scope")}
+              >
+                Scope Writer
+              </button>
+              <button
+                style={toolBtnStyle(tool === "contract")}
+                onClick={() => setTool("contract")}
+              >
+                Contract Builder
+              </button>
+              <button
+                style={toolBtnStyle(tool === "troubleshoot", !isPro())}
+                onClick={() => setTool("troubleshoot")}
+              >
+                Troubleshooting (Pro+)
+              </button>
 
               <div style={{ marginTop: 12, color: colors.muted, fontSize: 13 }}>
-                {demoMode ? "Demo preview active" : `Cloud sync: ${cloudLoading ? "Loading..." : "Connected"}`}
+                {demoMode
+                  ? "Demo preview active"
+                  : `Cloud sync: ${cloudLoading ? "Loading..." : "Connected"}`}
               </div>
             </div>
           </div>
@@ -1965,7 +2081,9 @@ LIKELY CAUSE AREAS
                         </div>
                       </div>
                     ))}
-                    {estimates.length === 0 && <div style={{ color: colors.muted }}>No estimates yet.</div>}
+                    {estimates.length === 0 && (
+                      <div style={{ color: colors.muted }}>No estimates yet.</div>
+                    )}
                   </div>
 
                   <div
@@ -1985,7 +2103,9 @@ LIKELY CAUSE AREAS
                         </div>
                       </div>
                     ))}
-                    {invoices.length === 0 && <div style={{ color: colors.muted }}>No invoices yet.</div>}
+                    {invoices.length === 0 && (
+                      <div style={{ color: colors.muted }}>No invoices yet.</div>
+                    )}
                   </div>
                 </div>
               </Card>
@@ -2027,12 +2147,22 @@ LIKELY CAUSE AREAS
                     <div style={{ color: colors.muted }}>No customers yet.</div>
                   ) : (
                     customers.map((c) => (
-                      <div key={c.id} style={{ background: colors.outputBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 14 }}>
+                      <div
+                        key={c.id}
+                        style={{
+                          background: colors.outputBg,
+                          border: `1px solid ${colors.border}`,
+                          borderRadius: 12,
+                          padding: 14,
+                        }}
+                      >
                         <div style={{ fontWeight: 800 }}>{c.name}</div>
                         <div style={{ color: colors.muted, marginTop: 4 }}>
                           {c.company || "-"} | {c.phone || "-"} | {c.email || "-"}
                         </div>
-                        <div style={{ color: colors.muted, marginTop: 6 }}>{c.address || ""}</div>
+                        <div style={{ color: colors.muted, marginTop: 6 }}>
+                          {c.address || ""}
+                        </div>
                         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
                           <button onClick={() => useCustomer(c)} style={secondaryBtn(colors)}>Use</button>
                           <button onClick={() => openCustomerDetail(c)} style={secondaryBtn(colors)}>Open Timeline</button>
@@ -2075,7 +2205,9 @@ LIKELY CAUSE AREAS
                 </div>
 
                 {!selectedCustomer ? (
-                  <div style={{ color: colors.muted }}>Select a customer to view their timeline.</div>
+                  <div style={{ color: colors.muted }}>
+                    Select a customer to view their timeline.
+                  </div>
                 ) : (
                   <>
                     <div
@@ -2087,18 +2219,41 @@ LIKELY CAUSE AREAS
                         marginBottom: 18,
                       }}
                     >
-                      <div style={{ fontSize: 22, fontWeight: 900 }}>{selectedCustomer.name}</div>
+                      <div style={{ fontSize: 22, fontWeight: 900 }}>
+                        {selectedCustomer.name}
+                      </div>
                       <div style={{ color: colors.muted, marginTop: 6 }}>
-                        {selectedCustomer.company || "No company"} • {selectedCustomer.phone || "No phone"} • {selectedCustomer.email || "No email"}
+                        {selectedCustomer.company || "No company"} •{" "}
+                        {selectedCustomer.phone || "No phone"} •{" "}
+                        {selectedCustomer.email || "No email"}
                       </div>
                       <div style={{ color: colors.muted, marginTop: 6 }}>
                         {selectedCustomer.address || "No address"}
                       </div>
-                      <div style={{ marginTop: 10 }}>{selectedCustomer.notes || "No notes."}</div>
+                      <div style={{ marginTop: 10 }}>
+                        {selectedCustomer.notes || "No notes."}
+                      </div>
 
-                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
-                        <button onClick={() => useCustomer(selectedCustomer)} style={secondaryBtn(colors)}>Use Customer</button>
-                        <button onClick={() => editCustomer(selectedCustomer)} style={secondaryBtn(colors)}>Edit Customer</button>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: 10,
+                          flexWrap: "wrap",
+                          marginTop: 12,
+                        }}
+                      >
+                        <button
+                          onClick={() => useCustomer(selectedCustomer)}
+                          style={secondaryBtn(colors)}
+                        >
+                          Use Customer
+                        </button>
+                        <button
+                          onClick={() => editCustomer(selectedCustomer)}
+                          style={secondaryBtn(colors)}
+                        >
+                          Edit Customer
+                        </button>
                       </div>
                     </div>
 
@@ -2164,7 +2319,10 @@ LIKELY CAUSE AREAS
                             Approved / Paid Estimate Value:{" "}
                             {currency(
                               selectedCustomerEstimates
-                                .filter((e) => e.status === "approved" || e.status === "paid")
+                                .filter(
+                                  (e) =>
+                                    e.status === "approved" || e.status === "paid"
+                                )
                                 .reduce((sum, e) => sum + e.aiPrice, 0)
                             )}
                           </div>
@@ -2196,8 +2354,18 @@ LIKELY CAUSE AREAS
                   <Field label="Depth (in)" type="number" value={String(estimate.depthInches)} onChange={(v) => setEstimate({ ...estimate, depthInches: Number(v) || 0 })} colors={colors} />
                 </Grid>
 
-                <Area label="AI Job Description (used for AI pricing)" value={estimate.aiJobDescription} onChange={(v) => setEstimate({ ...estimate, aiJobDescription: v })} colors={colors} />
-                <Area label="Notes" value={estimate.notes} onChange={(v) => setEstimate({ ...estimate, notes: v })} colors={colors} />
+                <Area
+                  label="AI Job Description (used for AI pricing)"
+                  value={estimate.aiJobDescription}
+                  onChange={(v) => setEstimate({ ...estimate, aiJobDescription: v })}
+                  colors={colors}
+                />
+                <Area
+                  label="Notes"
+                  value={estimate.notes}
+                  onChange={(v) => setEstimate({ ...estimate, notes: v })}
+                  colors={colors}
+                />
 
                 <div
                   style={{
@@ -2208,10 +2376,14 @@ LIKELY CAUSE AREAS
                     marginBottom: 16,
                   }}
                 >
-                  <div style={{ fontWeight: 800, marginBottom: 10 }}>AI Price Snapshot</div>
+                  <div style={{ fontWeight: 800, marginBottom: 10 }}>
+                    AI Price Snapshot
+                  </div>
                   <div>Labor: {currency(aiPricing.labor)}</div>
                   <div>Materials: {currency(aiPricing.materials)}</div>
-                  <div style={{ fontWeight: 800, marginTop: 6 }}>AI Total: {currency(aiPricing.total)}</div>
+                  <div style={{ fontWeight: 800, marginTop: 6 }}>
+                    AI Total: {currency(aiPricing.total)}
+                  </div>
                 </div>
               </Card>
             )}
@@ -2220,7 +2392,9 @@ LIKELY CAUSE AREAS
               <Card title="Estimate History + Job Status" colors={colors}>
                 <div style={{ display: "grid", gap: 12 }}>
                   {estimates.length === 0 ? (
-                    <div style={{ color: colors.muted }}>No saved estimates yet.</div>
+                    <div style={{ color: colors.muted }}>
+                      No saved estimates yet.
+                    </div>
                   ) : (
                     estimates.map((row) => (
                       <div
@@ -2233,20 +2407,57 @@ LIKELY CAUSE AREAS
                         }}
                       >
                         <div style={{ fontWeight: 800 }}>{row.customerName}</div>
-                        <div style={{ color: colors.muted, marginTop: 4 }}>{row.createdAt}</div>
+                        <div style={{ color: colors.muted, marginTop: 4 }}>
+                          {row.createdAt}
+                        </div>
                         <div style={{ marginTop: 8 }}>{row.jobDescription}</div>
                         <div style={{ marginTop: 8 }}>
-                          Labor: {currency(row.aiLabor)} | Materials: {currency(row.aiMaterial)} | Total:{" "}
+                          Labor: {currency(row.aiLabor)} | Materials:{" "}
+                          {currency(row.aiMaterial)} | Total:{" "}
                           <strong>{currency(row.aiPrice)}</strong>
                         </div>
-                        <div style={{ marginTop: 8, fontWeight: 700 }}>Status: {row.status}</div>
+                        <div style={{ marginTop: 8, fontWeight: 700 }}>
+                          Status: {row.status}
+                        </div>
 
-                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
-                          <button onClick={() => loadEstimateRow(row)} style={secondaryBtn(colors)}>Load</button>
-                          <button onClick={() => void updateEstimateStatus(row.id, "sent")} style={secondaryBtn(colors)}>Mark Sent</button>
-                          <button onClick={() => void updateEstimateStatus(row.id, "approved")} style={secondaryBtn(colors)}>Mark Approved</button>
-                          <button onClick={() => void updateEstimateStatus(row.id, "paid")} style={secondaryBtn(colors)}>Mark Paid</button>
-                          <button onClick={() => void deleteEstimateRow(row.id)} style={dangerBtn(colors)}>Delete</button>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 10,
+                            flexWrap: "wrap",
+                            marginTop: 10,
+                          }}
+                        >
+                          <button
+                            onClick={() => loadEstimateRow(row)}
+                            style={secondaryBtn(colors)}
+                          >
+                            Load
+                          </button>
+                          <button
+                            onClick={() => void updateEstimateStatus(row.id, "sent")}
+                            style={secondaryBtn(colors)}
+                          >
+                            Mark Sent
+                          </button>
+                          <button
+                            onClick={() => void updateEstimateStatus(row.id, "approved")}
+                            style={secondaryBtn(colors)}
+                          >
+                            Mark Approved
+                          </button>
+                          <button
+                            onClick={() => void updateEstimateStatus(row.id, "paid")}
+                            style={secondaryBtn(colors)}
+                          >
+                            Mark Paid
+                          </button>
+                          <button
+                            onClick={() => void deleteEstimateRow(row.id)}
+                            style={dangerBtn(colors)}
+                          >
+                            Delete
+                          </button>
                         </div>
                       </div>
                     ))
@@ -2272,7 +2483,9 @@ LIKELY CAUSE AREAS
                     marginBottom: 16,
                   }}
                 >
-                  <div style={{ fontWeight: 800, marginBottom: 10 }}>Invoice Preview</div>
+                  <div style={{ fontWeight: 800, marginBottom: 10 }}>
+                    Invoice Preview
+                  </div>
                   <div>
                     Total:{" "}
                     {currency(
@@ -2306,17 +2519,43 @@ LIKELY CAUSE AREAS
                         <div style={{ fontWeight: 800 }}>
                           {row.invoiceNumber || "Invoice"} — {row.customerName}
                         </div>
-                        <div style={{ color: colors.muted, marginTop: 4 }}>{row.createdAt}</div>
+                        <div style={{ color: colors.muted, marginTop: 4 }}>
+                          {row.createdAt}
+                        </div>
                         <div style={{ marginTop: 8 }}>{row.jobName}</div>
                         <div style={{ marginTop: 8 }}>
                           Total: <strong>{currency(row.total)}</strong>
                         </div>
-                        <div style={{ marginTop: 8, fontWeight: 700 }}>Status: {row.status}</div>
+                        <div style={{ marginTop: 8, fontWeight: 700 }}>
+                          Status: {row.status}
+                        </div>
 
-                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
-                          <button onClick={() => void updateInvoiceStatus(row.id, "paid")} style={secondaryBtn(colors)}>Mark Paid</button>
-                          <button onClick={() => void updateInvoiceStatus(row.id, "unpaid")} style={secondaryBtn(colors)}>Mark Unpaid</button>
-                          <button onClick={() => void deleteInvoiceRow(row.id)} style={dangerBtn(colors)}>Delete</button>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 10,
+                            flexWrap: "wrap",
+                            marginTop: 10,
+                          }}
+                        >
+                          <button
+                            onClick={() => void updateInvoiceStatus(row.id, "paid")}
+                            style={secondaryBtn(colors)}
+                          >
+                            Mark Paid
+                          </button>
+                          <button
+                            onClick={() => void updateInvoiceStatus(row.id, "unpaid")}
+                            style={secondaryBtn(colors)}
+                          >
+                            Mark Unpaid
+                          </button>
+                          <button
+                            onClick={() => void deleteInvoiceRow(row.id)}
+                            style={dangerBtn(colors)}
+                          >
+                            Delete
+                          </button>
                         </div>
                       </div>
                     ))
@@ -2329,17 +2568,45 @@ LIKELY CAUSE AREAS
               <Card title="Saved Docs" colors={colors}>
                 <div style={{ display: "grid", gap: 12 }}>
                   {savedDocs.length === 0 ? (
-                    <div style={{ color: colors.muted }}>No saved documents yet.</div>
+                    <div style={{ color: colors.muted }}>
+                      No saved documents yet.
+                    </div>
                   ) : (
                     savedDocs.map((d) => (
-                      <div key={d.id} style={{ background: colors.outputBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 14 }}>
+                      <div
+                        key={d.id}
+                        style={{
+                          background: colors.outputBg,
+                          border: `1px solid ${colors.border}`,
+                          borderRadius: 12,
+                          padding: 14,
+                        }}
+                      >
                         <div style={{ fontWeight: 800 }}>{d.title}</div>
                         <div style={{ color: colors.muted, marginTop: 4 }}>
-                          {d.type} | {d.customerName || "No customer"} | {d.createdAt}
+                          {d.type} | {d.customerName || "No customer"} |{" "}
+                          {d.createdAt}
                         </div>
-                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
-                          <button onClick={() => loadSavedDoc(d)} style={secondaryBtn(colors)}>Open</button>
-                          <button onClick={() => void deleteSavedDoc(d.id)} style={dangerBtn(colors)}>Delete</button>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 10,
+                            flexWrap: "wrap",
+                            marginTop: 10,
+                          }}
+                        >
+                          <button
+                            onClick={() => loadSavedDoc(d)}
+                            style={secondaryBtn(colors)}
+                          >
+                            Open
+                          </button>
+                          <button
+                            onClick={() => void deleteSavedDoc(d.id)}
+                            style={dangerBtn(colors)}
+                          >
+                            Delete
+                          </button>
                         </div>
                       </div>
                     ))
@@ -2354,10 +2621,19 @@ LIKELY CAUSE AREAS
                   <Field label="Customer Name" value={aiBuilder.customerName} onChange={(v) => setAiBuilder({ ...aiBuilder, customerName: v })} colors={colors} />
                   <Field label="Project Type" value={aiBuilder.projectType} onChange={(v) => setAiBuilder({ ...aiBuilder, projectType: v })} colors={colors} />
                 </Grid>
-                <Area label="Describe the job in plain English" value={aiBuilder.prompt} onChange={(v) => setAiBuilder({ ...aiBuilder, prompt: v })} colors={colors} />
+                <Area
+                  label="Describe the job in plain English"
+                  value={aiBuilder.prompt}
+                  onChange={(v) => setAiBuilder({ ...aiBuilder, prompt: v })}
+                  colors={colors}
+                />
                 <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                  <button onClick={aiBuildEstimate} style={primaryBtn(colors)}>AI Build Estimate</button>
-                  <button onClick={aiBuildScope} style={secondaryBtn(colors)}>AI Build Scope</button>
+                  <button onClick={aiBuildEstimate} style={primaryBtn(colors)}>
+                    AI Build Estimate
+                  </button>
+                  <button onClick={aiBuildScope} style={secondaryBtn(colors)}>
+                    AI Build Scope
+                  </button>
                 </div>
               </Card>
             )}
@@ -2404,8 +2680,12 @@ LIKELY CAUSE AREAS
                       {tool === "settings" ? "Save Settings" : "Generate Output"}
                     </button>
                   )}
-                  <button onClick={copyOutput} style={secondaryBtn(colors)}>Copy</button>
-                  <button onClick={exportPDF} style={secondaryBtn(colors)}>Export PDF</button>
+                  <button onClick={copyOutput} style={secondaryBtn(colors)}>
+                    Copy
+                  </button>
+                  <button onClick={exportPDF} style={secondaryBtn(colors)}>
+                    Export PDF
+                  </button>
 
                   {tool === "estimate" && (
                     <>
@@ -2450,7 +2730,11 @@ LIKELY CAUSE AREAS
                   {tool === "scope" && (
                     <button
                       onClick={() =>
-                        void saveCurrentOutput("scope", scope.projectName || "Scope of Work", scope.customerName)
+                        void saveCurrentOutput(
+                          "scope",
+                          scope.projectName || "Scope of Work",
+                          scope.customerName
+                        )
                       }
                       style={secondaryBtn(colors)}
                     >
@@ -2493,10 +2777,16 @@ LIKELY CAUSE AREAS
                   flexWrap: "wrap",
                 }}
               >
-                <div style={{ fontSize: 18, fontWeight: 800 }}>Generated Output</div>
+                <div style={{ fontSize: 18, fontWeight: 800 }}>
+                  Generated Output
+                </div>
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <button onClick={copyOutput} style={secondaryBtn(colors)}>Copy</button>
-                  <button onClick={exportPDF} style={secondaryBtn(colors)}>Export PDF</button>
+                  <button onClick={copyOutput} style={secondaryBtn(colors)}>
+                    Copy
+                  </button>
+                  <button onClick={exportPDF} style={secondaryBtn(colors)}>
+                    Export PDF
+                  </button>
                 </div>
               </div>
 
@@ -2746,8 +3036,12 @@ function Metric({
         padding: 12,
       }}
     >
-      <div style={{ fontSize: 12, color: colors.muted, marginBottom: 6 }}>{label}</div>
-      <div style={{ fontSize: 18, fontWeight: 800, color: colors.text }}>{value}</div>
+      <div style={{ fontSize: 12, color: colors.muted, marginBottom: 6 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 18, fontWeight: 800, color: colors.text }}>
+        {value}
+      </div>
     </div>
   );
 }
