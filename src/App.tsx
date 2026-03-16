@@ -47,10 +47,13 @@ const SUPABASE_URL = "https://ljizlaabarhyzocfcsba.supabase.co";
 const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqaXpsYWFiYXJoeXpvY2Zjc2JhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1ODcxNTIsImV4cCI6MjA4OTE2MzE1Mn0.eJstZOcLE_BALH1JMhju4zQonRxMQwk5DbEXpYUIKbw";
 
-const supabase = (window as any).supabase.createClient(
-  SUPABASE_URL,
-  SUPABASE_ANON_KEY
-);
+declare global {
+  interface Window {
+    supabase: any;
+  }
+}
+
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const LANGUAGES: Language[] = [
   "English",
@@ -526,18 +529,297 @@ function suggestedReply(lead: LeadRow): string {
 function launchChecklist(): string {
   return `SOFT LAUNCH CHECKLIST
 
-1. Replace TEAM_STRIPE_LINK in App.tsx with your real Stripe checkout link
-2. Take 3 screenshots:
+1. Verify all 3 Stripe links work
+2. Take screenshots of:
    - Lead Inbox
-   - AI Estimate Engine
-   - AI Marketing Generator
-3. Post 1 contractor-focused offer today
-4. DM 20 local contractors with a screenshot and short pitch
-5. Run a small local Facebook test ad with a $10-$20 daily budget
-6. Collect the first 3-5 users before making major changes
+   - Estimate Engine
+   - Marketing Generator
+3. Post one contractor offer today
+4. DM 20 contractors with screenshots
+5. Run one small Facebook test ad
+6. Ask first users what feature saves them the most time
 
-SIMPLE PITCH
-"Tradesman AI helps contractors score leads, build estimates, reply faster, and generate ads in minutes."`;
+PITCH
+Tradesman AI helps contractors score leads, build estimates, reply faster, and generate ads in minutes.`;
+}
+
+function buttonStyle(type?: "secondary"): React.CSSProperties {
+  if (type === "secondary") {
+    return {
+      background: "#ffffff",
+      color: "#111827",
+      border: "1px solid #d1d5db",
+      borderRadius: 10,
+      padding: "10px 14px",
+      cursor: "pointer",
+      fontWeight: 700,
+    };
+  }
+
+  return {
+    background: "#6366f1",
+    color: "white",
+    border: "none",
+    borderRadius: 10,
+    padding: "10px 14px",
+    cursor: "pointer",
+    fontWeight: 700,
+  };
+}
+
+function inputBox(): React.CSSProperties {
+  return {
+    width: "100%",
+    padding: 12,
+    borderRadius: 10,
+    border: "1px solid #d1d5db",
+    boxSizing: "border-box",
+  };
+}
+
+function PricingCard({
+  title,
+  price,
+  bullets,
+  buttonText,
+  onClick,
+  highlighted,
+}: {
+  title: string;
+  price: string;
+  bullets: string[];
+  buttonText: string;
+  onClick: () => void;
+  highlighted?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        border: highlighted ? "2px solid #6366f1" : "1px solid #e5e7eb",
+        borderRadius: 12,
+        padding: 16,
+        background: highlighted ? "#eef2ff" : "#ffffff",
+      }}
+    >
+      <div style={{ fontWeight: 800, fontSize: 18 }}>{title}</div>
+      <div style={{ fontSize: 24, fontWeight: 800, margin: "8px 0 12px" }}>
+        {price}
+      </div>
+      <ul style={{ paddingLeft: 18, marginBottom: 12 }}>
+        {bullets.map((b, i) => (
+          <li key={i} style={{ marginBottom: 6 }}>
+            {b}
+          </li>
+        ))}
+      </ul>
+      <button onClick={onClick} style={buttonStyle()}>
+        {buttonText}
+      </button>
+    </div>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div
+      style={{
+        background: "#f8fafc",
+        border: "1px solid #e5e7eb",
+        borderRadius: 12,
+        padding: 14,
+      }}
+    >
+      <div style={{ fontSize: 12, color: "#6b7280" }}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 800 }}>{value}</div>
+    </div>
+  );
+}
+
+function LeadCard({
+  lead,
+  onStatus,
+  onDelete,
+  onLoadReply,
+}: {
+  lead: LeadRow;
+  onStatus: (id: string, status: string) => void;
+  onDelete: (id: string) => void;
+  onLoadReply: (text: string) => void;
+}) {
+  const combined = `${lead.title}\n${lead.description}\n${lead.city}\n${lead.budget}\n${lead.contact_name}\n${lead.contact_info}`;
+  const scored = scoreLead(combined);
+  const bucket = scoreBucket(Number(lead.score || 0));
+  const reply = suggestedReply(lead);
+  const range = quoteRangeFromLead(
+    `${lead.title}\n${lead.description}`,
+    Number(lead.score || 0)
+  );
+
+  return (
+    <div
+      style={{
+        border: "1px solid #e5e7eb",
+        borderRadius: 12,
+        padding: 14,
+        background: "white",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+        <div>
+          <div style={{ fontWeight: 800 }}>{lead.title || "Untitled Lead"}</div>
+          <div style={{ color: "#6b7280", fontSize: 13 }}>
+            {lead.city || "No city"} • {lead.source || "manual"} • {lead.created_at}
+          </div>
+        </div>
+        <div
+          style={{
+            padding: "6px 10px",
+            borderRadius: 999,
+            background:
+              bucket === "Hot"
+                ? "#fee2e2"
+                : bucket === "Warm"
+                ? "#fef3c7"
+                : "#e5e7eb",
+            fontWeight: 800,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {bucket} • {lead.score}
+        </div>
+      </div>
+
+      <div style={{ marginTop: 10, whiteSpace: "pre-wrap" }}>
+        {lead.description || "No description"}
+      </div>
+
+      <div style={{ marginTop: 10, color: "#374151", lineHeight: 1.7 }}>
+        <div>Contact: {lead.contact_name || "-"} / {lead.contact_info || "-"}</div>
+        <div>Budget: {lead.budget || "-"}</div>
+        <div>Status: <strong>{lead.status}</strong></div>
+        <div>Detected Job: <strong>{detectJobType(`${lead.title} ${lead.description}`)}</strong></div>
+        <div>Suggested Quote Range: <strong>{range}</strong></div>
+      </div>
+
+      <div
+        style={{
+          marginTop: 10,
+          padding: 12,
+          borderRadius: 10,
+          background: "#f8fafc",
+          border: "1px solid #e5e7eb",
+        }}
+      >
+        <div style={{ fontWeight: 700, marginBottom: 6 }}>Score Reasons</div>
+        <div style={{ fontSize: 14, color: "#374151" }}>
+          {scored.reasons.length ? scored.reasons.join(" • ") : "No strong signals found"}
+        </div>
+      </div>
+
+      <div
+        style={{
+          marginTop: 10,
+          padding: 12,
+          borderRadius: 10,
+          background: "#f8fafc",
+          border: "1px solid #e5e7eb",
+        }}
+      >
+        <div style={{ fontWeight: 700, marginBottom: 6 }}>Suggested Reply</div>
+        <div style={{ whiteSpace: "pre-wrap", fontSize: 14 }}>{reply}</div>
+        <div style={{ marginTop: 10 }}>
+          <button onClick={() => onLoadReply(reply)} style={buttonStyle("secondary")}>
+            Load Reply Into Output
+          </button>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+        <button onClick={() => onStatus(lead.id, "contacted")} style={buttonStyle("secondary")}>
+          Contacted
+        </button>
+        <button onClick={() => onStatus(lead.id, "quoted")} style={buttonStyle("secondary")}>
+          Quoted
+        </button>
+        <button onClick={() => onStatus(lead.id, "won")} style={buttonStyle("secondary")}>
+          Won
+        </button>
+        <button onClick={() => onDelete(lead.id)} style={buttonStyle("secondary")}>
+          Delete
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PipelineColumn({
+  title,
+  bg,
+  leads,
+  onStatus,
+  onDelete,
+  onLoadReply,
+}: {
+  title: string;
+  bg: string;
+  leads: LeadRow[];
+  onStatus: (id: string, status: string) => void;
+  onDelete: (id: string) => void;
+  onLoadReply: (text: string) => void;
+}) {
+  return (
+    <div
+      style={{
+        background: bg,
+        borderRadius: 12,
+        padding: 14,
+        border: "1px solid #e5e7eb",
+        minHeight: 200,
+      }}
+    >
+      <div style={{ fontWeight: 800, marginBottom: 10 }}>{title}</div>
+      {leads.length === 0 && <div style={{ color: "#6b7280" }}>No leads</div>}
+      <div style={{ display: "grid", gap: 12 }}>
+        {leads.map((lead) => (
+          <LeadCard
+            key={lead.id}
+            lead={lead}
+            onStatus={onStatus}
+            onDelete={onDelete}
+            onLoadReply={onLoadReply}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function LandingStat({
+  title,
+  text,
+}: {
+  title: string;
+  text: string;
+}) {
+  return (
+    <div
+      style={{
+        background: "#111827",
+        border: "1px solid #334155",
+        borderRadius: 16,
+        padding: 16,
+      }}
+    >
+      <div style={{ fontWeight: 900, marginBottom: 8 }}>{title}</div>
+      <div style={{ color: "#a8b3c7", lineHeight: 1.6 }}>{text}</div>
+    </div>
+  );
 }
 
 export default function App() {
@@ -587,7 +869,7 @@ export default function App() {
     });
 
     const authListener = supabase.auth.onAuthStateChange(
-      async (_event: any, nextSession: any) => {
+      (_event: any, nextSession: any) => {
         setSession(nextSession);
         setAuthLoading(false);
       }
@@ -637,7 +919,7 @@ export default function App() {
       email: authEmail,
       password: authPassword,
       options: {
-        emailRedirectTo: "https://tradesman-ai-pro.vercel.app",
+        emailRedirectTo: window.location.origin,
       },
     });
 
@@ -814,17 +1096,15 @@ ${result.offer}
     return {
       total: leads.length,
       hot: leads.filter((l) => scoreBucket(Number(l.score || 0)) === "Hot").length,
-      warm: leads.filter((l) => scoreBucket(Number(l.score || 0)) === "Warm").length,
-      cold: leads.filter((l) => scoreBucket(Number(l.score || 0)) === "Cold").length,
-      won: leads.filter((l) => l.status === "won").length,
       quoted: leads.filter((l) => l.status === "quoted").length,
+      won: leads.filter((l) => l.status === "won").length,
     };
   }, [leads]);
 
   const addCustomer = () => {
     if (!customerName.trim()) return;
-    setCustomers([
-      ...customers,
+    setCustomers((prev) => [
+      ...prev,
       {
         name: customerName.trim(),
         created: new Date().toLocaleDateString(),
@@ -940,7 +1220,7 @@ ${result.offer}
                   marginBottom: 16,
                 }}
               >
-                Score leads, write estimates, and generate ads in minutes.
+                Score leads, quote jobs, and generate ads in minutes.
               </div>
 
               <div
@@ -951,7 +1231,7 @@ ${result.offer}
                   marginBottom: 24,
                 }}
               >
-                Tradesman AI helps contractors respond faster, quote jobs faster,
+                Tradesman AI helps contractors respond faster, estimate faster,
                 and market faster without hiring office staff.
               </div>
 
@@ -1176,17 +1456,14 @@ ${result.offer}
         <h2 style={{ marginTop: 0 }}>Launch-Ready Offer</h2>
         <div style={{ lineHeight: 1.8 }}>
           <div><strong>Headline:</strong> Tradesman AI helps contractors score leads, quote jobs, and market faster.</div>
-          <div><strong>Best entry offer:</strong> 7-day test drive + Basic at $19 / Pro at $49 / Team at $99.</div>
+          <div><strong>Best entry offer:</strong> Basic at $19, Pro at $49, Team at $99.</div>
           <div><strong>Best first niche:</strong> excavation, gravel driveway, skid steer, fencing, and dirt-work contractors.</div>
         </div>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
           <button onClick={() => setOutput(launchChecklist())} style={buttonStyle()}>
             Load Launch Checklist
           </button>
-          <button
-            onClick={() => window.open(TEAM_STRIPE_LINK, "_blank")}
-            style={buttonStyle("secondary")}
-          >
+          <button onClick={() => window.open(TEAM_STRIPE_LINK, "_blank")} style={buttonStyle("secondary")}>
             Open Team Checkout
           </button>
         </div>
@@ -1201,13 +1478,7 @@ ${result.offer}
           marginBottom: 36,
         }}
       >
-        <div
-          style={{
-            border: "1px solid #e5e7eb",
-            borderRadius: 14,
-            padding: 20,
-          }}
-        >
+        <div style={{ border: "1px solid #e5e7eb", borderRadius: 14, padding: 20 }}>
           <h2 style={{ marginTop: 0 }}>Customer Manager</h2>
 
           <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
@@ -1215,12 +1486,7 @@ ${result.offer}
               value={customerName}
               onChange={(e) => setCustomerName(e.target.value)}
               placeholder="Customer Name"
-              style={{
-                flex: 1,
-                padding: "12px",
-                borderRadius: 10,
-                border: "1px solid #d1d5db",
-              }}
+              style={{ ...inputBox(), flex: 1 }}
             />
             <button onClick={addCustomer} style={buttonStyle()}>
               Add
@@ -1268,13 +1534,7 @@ ${result.offer}
           </div>
         </div>
 
-        <div
-          style={{
-            border: "1px solid #e5e7eb",
-            borderRadius: 14,
-            padding: 20,
-          }}
-        >
+        <div style={{ border: "1px solid #e5e7eb", borderRadius: 14, padding: 20 }}>
           <h2 style={{ marginTop: 0 }}>Plans + Access</h2>
 
           <div style={{ display: "grid", gap: 12, marginBottom: 16 }}>
@@ -1283,9 +1543,9 @@ ${result.offer}
               price="$19/mo"
               bullets={[
                 "Customer manager",
-                "Job notes",
-                "Estimate output",
+                "Estimate engine",
                 "Translation tools",
+                "Basic workflow",
               ]}
               buttonText="Subscribe"
               onClick={() => window.open(BASIC_STRIPE_LINK, "_blank")}
@@ -1297,7 +1557,7 @@ ${result.offer}
               bullets={[
                 "Everything in Basic",
                 "Lead inbox",
-                "AI lead reply",
+                "AI replies",
                 "Marketing generator",
               ]}
               buttonText="Upgrade"
@@ -1309,7 +1569,7 @@ ${result.offer}
               price="$99/mo"
               bullets={[
                 "Everything in Pro",
-                "Team workflow positioning",
+                "Team positioning",
                 "Shared-office use case",
                 "Priority support",
               ]}
@@ -1343,14 +1603,7 @@ ${result.offer}
         </div>
       </div>
 
-      <div
-        style={{
-          border: "1px solid #e5e7eb",
-          borderRadius: 14,
-          padding: 20,
-          marginBottom: 24,
-        }}
-      >
+      <div style={{ border: "1px solid #e5e7eb", borderRadius: 14, padding: 20, marginBottom: 24 }}>
         <h2 style={{ marginTop: 0 }}>AI Estimate Engine</h2>
 
         <div
@@ -1364,7 +1617,7 @@ ${result.offer}
           <textarea
             value={jobDescription}
             onChange={(e) => setJobDescription(e.target.value)}
-            placeholder="Type the job in plain English. Example: Install 80ft privacy fence with one gate and remove old fence."
+            placeholder="Type the job in plain English."
             style={{
               minHeight: 110,
               padding: 12,
@@ -1402,7 +1655,6 @@ ${result.offer}
             border: "1px solid #e5e7eb",
             borderRadius: 12,
             padding: 16,
-            marginBottom: 18,
           }}
         >
           <strong>Live Estimate Snapshot</strong>
@@ -1413,24 +1665,13 @@ ${result.offer}
             <div>Materials Cost: {money(liveEstimate.materialsCost)}</div>
             <div>Equipment Cost: {money(liveEstimate.equipmentCost)}</div>
             <div>Markup: {liveEstimate.markupPercent}%</div>
-            <div>
-              <strong>Total: {money(liveEstimate.total)}</strong>
-            </div>
+            <div><strong>Total: {money(liveEstimate.total)}</strong></div>
           </div>
         </div>
       </div>
 
-      <div
-        style={{
-          border: "1px solid #e5e7eb",
-          borderRadius: 14,
-          padding: 20,
-          marginBottom: 24,
-        }}
-      >
-        <h2 style={{ marginTop: 0 }}>
-          Language + Translate Tools {hasAccess(plan, "basic") ? "" : "(Basic+)"}
-        </h2>
+      <div style={{ border: "1px solid #e5e7eb", borderRadius: 14, padding: 20, marginBottom: 24 }}>
+        <h2 style={{ marginTop: 0 }}>Language + Translate Tools</h2>
 
         <div
           style={{
@@ -1470,11 +1711,6 @@ ${result.offer}
           </div>
         </div>
 
-        <div style={{ color: "#6b7280", fontSize: 13, marginBottom: 12 }}>
-          Highlight text inside the output box, then click{" "}
-          <strong>Translate Selected Text</strong>.
-        </div>
-
         <textarea
           ref={outputRef}
           value={output}
@@ -1501,9 +1737,7 @@ ${result.offer}
             padding: 14,
           }}
         >
-          <div style={{ fontWeight: 700, marginBottom: 8 }}>
-            Translation Preview
-          </div>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>Translation Preview</div>
           <div
             style={{
               minHeight: 80,
@@ -1516,10 +1750,7 @@ ${result.offer}
           </div>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button
-              onClick={replaceAllWithTranslatedPreview}
-              style={buttonStyle()}
-            >
+            <button onClick={replaceAllWithTranslatedPreview} style={buttonStyle()}>
               Replace Output With Preview
             </button>
             <button
@@ -1646,27 +1877,17 @@ ${result.offer}
             marginBottom: 16,
           }}
         >
-          <div style={{ fontWeight: 700, marginBottom: 8 }}>
-            Auto Score Preview
-          </div>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>Auto Score Preview</div>
           <div style={{ lineHeight: 1.8 }}>
+            <div>Score: <strong>{scoredDraftLead.score}</strong></div>
+            <div>Bucket: <strong>{scoreBucket(scoredDraftLead.score)}</strong></div>
             <div>
-              Score: <strong>{scoredDraftLead.score}</strong>
-            </div>
-            <div>
-              Bucket: <strong>{scoreBucket(scoredDraftLead.score)}</strong>
-            </div>
-            <div>
-              Job Type:{" "}
-              <strong>{detectJobType(`${leadTitle} ${leadDescription}`)}</strong>
+              Job Type: <strong>{detectJobType(`${leadTitle} ${leadDescription}`)}</strong>
             </div>
             <div>
               Quote Range:{" "}
               <strong>
-                {quoteRangeFromLead(
-                  `${leadTitle}\n${leadDescription}`,
-                  scoredDraftLead.score
-                )}
+                {quoteRangeFromLead(`${leadTitle}\n${leadDescription}`, scoredDraftLead.score)}
               </strong>
             </div>
             <div style={{ marginTop: 6 }}>
