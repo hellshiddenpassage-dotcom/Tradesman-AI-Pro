@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 
 const BASIC_STRIPE_LINK = "https://buy.stripe.com/eVqdR26372Cb7BW8Y5d7q03";
 const PRO_STRIPE_LINK = "https://buy.stripe.com/dRmfZa3UZa4D7BWgqxd7q04";
+const TEAM_STRIPE_LINK = "#";
 
 const SUPABASE_URL = "https://ljizlaabarhyzocfcsba.supabase.co";
 const SUPABASE_ANON_KEY =
@@ -13,13 +14,14 @@ const supabase = (window as any).supabase.createClient(
 );
 
 type ThemeMode = "dark" | "light";
-type Plan = "basic" | "pro";
+type Plan = "basic" | "pro" | "team";
 type EstimateStatus = "draft" | "sent" | "approved" | "paid";
 type InvoiceStatus = "unpaid" | "paid";
 type Tool =
   | "dashboard"
   | "settings"
   | "customers"
+  | "customerDetail"
   | "estimate"
   | "estimates"
   | "saved"
@@ -159,8 +161,8 @@ type AiBuilderForm = {
   prompt: string;
 };
 
-const SETTINGS_KEY = "tradesman_ai_company_settings_v12";
-const THEME_KEY = "tradesman_ai_theme_v12";
+const SETTINGS_KEY = "tradesman_ai_company_settings_v13";
+const THEME_KEY = "tradesman_ai_theme_v13";
 
 const defaultSettings: CompanySettings = {
   companyName: "Your Company",
@@ -174,6 +176,94 @@ const defaultSettings: CompanySettings = {
   dumpFeesDefault: 0,
   currency: "USD",
 };
+
+const demoCustomers: Customer[] = [
+  {
+    id: "demo-c1",
+    name: "John Smith",
+    company: "Smith Ranch",
+    phone: "555-100-2000",
+    email: "john@example.com",
+    address: "123 County Rd",
+    notes: "Repeat gravel / dirt-work customer",
+  },
+  {
+    id: "demo-c2",
+    name: "ABC Contracting",
+    company: "ABC Contracting",
+    phone: "555-888-1212",
+    email: "office@abc.example",
+    address: "45 Industrial Loop",
+    notes: "Commercial customer",
+  },
+];
+
+const demoEstimates: EstimateRow[] = [
+  {
+    id: "demo-e1",
+    customerId: "demo-c1",
+    customerName: "John Smith",
+    jobDescription: "Shop pad prep and road base installation",
+    aiPrice: 4200,
+    aiLabor: 1800,
+    aiMaterial: 2400,
+    status: "approved",
+    createdAt: "Demo Data",
+  },
+  {
+    id: "demo-e2",
+    customerId: "demo-c2",
+    customerName: "ABC Contracting",
+    jobDescription: "Brush clearing on 2 acres",
+    aiPrice: 3100,
+    aiLabor: 2700,
+    aiMaterial: 400,
+    status: "sent",
+    createdAt: "Demo Data",
+  },
+];
+
+const demoInvoices: InvoiceRow[] = [
+  {
+    id: "demo-i1",
+    customerId: "demo-c1",
+    customerName: "John Smith",
+    invoiceNumber: "2001",
+    jobName: "Shop Pad",
+    total: 4200,
+    status: "paid",
+    createdAt: "Demo Data",
+  },
+  {
+    id: "demo-i2",
+    customerId: "demo-c2",
+    customerName: "ABC Contracting",
+    invoiceNumber: "2002",
+    jobName: "Brush Clearing",
+    total: 3100,
+    status: "unpaid",
+    createdAt: "Demo Data",
+  },
+];
+
+const demoDocs: SavedDoc[] = [
+  {
+    id: "demo-d1",
+    type: "scope",
+    title: "Shop Pad Scope",
+    customerName: "John Smith",
+    createdAt: "Demo Data",
+    content: "Demo scope of work for a shop pad project.",
+  },
+  {
+    id: "demo-d2",
+    type: "contract",
+    title: "Brush Clearing Contract",
+    customerName: "ABC Contracting",
+    createdAt: "Demo Data",
+    content: "Demo contract for brush clearing services.",
+  },
+];
 
 function getInitialSettings(): CompanySettings {
   try {
@@ -245,7 +335,6 @@ function generateAIPrice(description: string) {
   materials += Math.round(lengthBonus * 0.4);
 
   const total = labor + materials;
-
   return { labor, materials, total };
 }
 
@@ -257,6 +346,7 @@ export default function App() {
   const [authPassword, setAuthPassword] = useState("");
   const [authMessage, setAuthMessage] = useState("");
   const [authLoading, setAuthLoading] = useState(true);
+  const [demoMode, setDemoMode] = useState(false);
 
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
   const [tool, setTool] = useState<Tool>("dashboard");
@@ -268,6 +358,7 @@ export default function App() {
   const [estimates, setEstimates] = useState<EstimateRow[]>([]);
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
   const [cloudLoading, setCloudLoading] = useState(false);
+  const [selectedCustomerId, setSelectedCustomerId] = useState("");
 
   const [customerForm, setCustomerForm] = useState<Customer>({
     id: "",
@@ -402,6 +493,16 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => {
+    if (demoMode) {
+      setProfilePlan("pro");
+      setCustomers(demoCustomers);
+      setSavedDocs(demoDocs);
+      setEstimates(demoEstimates);
+      setInvoices(demoInvoices);
+      setTool("dashboard");
+      return;
+    }
+
     if (session?.user?.id) {
       void bootUser(session.user);
     } else {
@@ -411,7 +512,7 @@ export default function App() {
       setInvoices([]);
       setProfilePlan("basic");
     }
-  }, [session]);
+  }, [session, demoMode]);
 
   async function ensureProfile(user: any) {
     const existing = await supabase
@@ -440,7 +541,10 @@ export default function App() {
       return "basic" as Plan;
     }
 
-    return (existing.data.plan === "pro" ? "pro" : "basic") as Plan;
+    const plan = existing.data.plan;
+    if (plan === "team") return "team";
+    if (plan === "pro") return "pro";
+    return "basic";
   }
 
   async function bootUser(user: any) {
@@ -488,10 +592,7 @@ export default function App() {
         notes: row.notes || "",
       }));
       setCustomers(mappedCustomers);
-
-      mappedCustomers.forEach((c) => {
-        customerNameMap.set(c.id, c.name);
-      });
+      mappedCustomers.forEach((c) => customerNameMap.set(c.id, c.name));
     }
 
     if (!docsResult.error) {
@@ -551,6 +652,7 @@ export default function App() {
         inputBg: "#ffffff",
         danger: "#b42318",
         success: "#067647",
+        warning: "#b54708",
       };
     }
 
@@ -567,6 +669,7 @@ export default function App() {
       inputBg: "#0f1724",
       danger: "#ef4444",
       success: "#22c55e",
+      warning: "#f59e0b",
     };
   }, [theme]);
 
@@ -623,6 +726,22 @@ export default function App() {
       paidValue,
     };
   }, [estimates, invoices]);
+
+  const selectedCustomer = useMemo(() => {
+    return customers.find((c) => c.id === selectedCustomerId) || null;
+  }, [customers, selectedCustomerId]);
+
+  const selectedCustomerEstimates = useMemo(() => {
+    return estimates.filter((e) => e.customerId === selectedCustomerId);
+  }, [estimates, selectedCustomerId]);
+
+  const selectedCustomerInvoices = useMemo(() => {
+    return invoices.filter((i) => i.customerId === selectedCustomerId);
+  }, [invoices, selectedCustomerId]);
+
+  const selectedCustomerDocs = useMemo(() => {
+    return savedDocs.filter((d) => d.customerName === selectedCustomer?.name);
+  }, [savedDocs, selectedCustomer]);
 
   function currency(value: number) {
     return new Intl.NumberFormat("en-US", {
@@ -685,7 +804,11 @@ export default function App() {
   }
 
   function isPro() {
-    return profilePlan === "pro";
+    return profilePlan === "pro" || profilePlan === "team" || demoMode;
+  }
+
+  function isTeam() {
+    return profilePlan === "team";
   }
 
   function exportPDF() {
@@ -737,6 +860,11 @@ export default function App() {
   }
 
   async function saveCurrentOutput(type: string, title: string, customerName: string) {
+    if (demoMode) {
+      setOutput("Demo mode is read-only. Create an account to save documents.");
+      return;
+    }
+
     if (!output || output === "Your generated output will appear here.") {
       alert("Generate output first.");
       return;
@@ -765,6 +893,11 @@ export default function App() {
   }
 
   async function saveEstimateToCloud() {
+    if (demoMode) {
+      setOutput("Demo mode is read-only. Create an account to save estimates.");
+      return;
+    }
+
     if (!session?.user?.id) {
       alert("You must be signed in.");
       return;
@@ -815,6 +948,10 @@ draft`);
   }
 
   async function updateEstimateStatus(id: string, status: EstimateStatus) {
+    if (demoMode) {
+      setOutput("Demo mode is read-only.");
+      return;
+    }
     if (!session?.user?.id) return;
 
     const result = await supabase.from("estimates").update({ status }).eq("id", id);
@@ -862,6 +999,10 @@ ${row.createdAt}`);
   }
 
   async function deleteEstimateRow(id: string) {
+    if (demoMode) {
+      setOutput("Demo mode is read-only.");
+      return;
+    }
     if (!session?.user?.id) return;
 
     const result = await supabase.from("estimates").delete().eq("id", id);
@@ -875,6 +1016,11 @@ ${row.createdAt}`);
   }
 
   async function saveInvoiceToCloud() {
+    if (demoMode) {
+      setOutput("Demo mode is read-only. Create an account to save invoices.");
+      return;
+    }
+
     if (!session?.user?.id) {
       alert("You must be signed in.");
       return;
@@ -921,6 +1067,10 @@ unpaid`);
   }
 
   async function updateInvoiceStatus(id: string, status: InvoiceStatus) {
+    if (demoMode) {
+      setOutput("Demo mode is read-only.");
+      return;
+    }
     if (!session?.user?.id) return;
 
     const result = await supabase.from("invoices").update({ status }).eq("id", id);
@@ -935,6 +1085,10 @@ unpaid`);
   }
 
   async function deleteInvoiceRow(id: string) {
+    if (demoMode) {
+      setOutput("Demo mode is read-only.");
+      return;
+    }
     if (!session?.user?.id) return;
 
     const result = await supabase.from("invoices").delete().eq("id", id);
@@ -953,6 +1107,10 @@ unpaid`);
   }
 
   async function deleteSavedDoc(id: string) {
+    if (demoMode) {
+      setOutput("Demo mode is read-only.");
+      return;
+    }
     if (!session?.user?.id) return;
 
     const result = await supabase.from("saved_docs").delete().eq("id", id);
@@ -966,6 +1124,11 @@ unpaid`);
   }
 
   async function saveCustomer() {
+    if (demoMode) {
+      setOutput("Demo mode is read-only. Create an account to save customers.");
+      return;
+    }
+
     if (!customerForm.name.trim()) {
       alert("Customer name is required.");
       return;
@@ -1030,6 +1193,10 @@ unpaid`);
   }
 
   async function deleteCustomer(id: string) {
+    if (demoMode) {
+      setOutput("Demo mode is read-only.");
+      return;
+    }
     if (!session?.user?.id) return;
 
     const result = await supabase.from("customers").delete().eq("id", id);
@@ -1040,6 +1207,11 @@ unpaid`);
     }
 
     await loadCloudData(session.user.id);
+  }
+
+  function openCustomerDetail(customer: Customer) {
+    setSelectedCustomerId(customer.id);
+    setTool("customerDetail");
   }
 
   function useCustomer(customer: Customer) {
@@ -1080,7 +1252,7 @@ unpaid`);
 
   function aiBuildEstimate() {
     if (!isPro()) {
-      setOutput("AI Builder is a Pro feature. Upgrade to Pro to unlock it.");
+      setOutput("AI Builder is a Pro or Team feature. Upgrade to unlock it.");
       return;
     }
 
@@ -1149,7 +1321,7 @@ Estimate form updated for refinement.`);
 
   function aiBuildScope() {
     if (!isPro()) {
-      setOutput("AI Builder is a Pro feature. Upgrade to Pro to unlock it.");
+      setOutput("AI Builder is a Pro or Team feature. Upgrade to unlock it.");
       return;
     }
 
@@ -1295,7 +1467,7 @@ ${contract.signatures}`);
 
   function generateTroubleshoot() {
     if (!isPro()) {
-      setOutput("Troubleshooting Assistant is a Pro feature.");
+      setOutput("Troubleshooting Assistant is a Pro or Team feature.");
       return;
     }
 
@@ -1333,6 +1505,17 @@ LIKELY CAUSE AREAS
     navigator.clipboard.writeText(output);
   }
 
+  function startDemo() {
+    setDemoMode(true);
+    setTool("dashboard");
+    setOutput("Demo mode loaded.");
+  }
+
+  function exitDemo() {
+    setDemoMode(false);
+    setOutput("Exited demo mode.");
+  }
+
   function toolBtnStyle(active: boolean, disabled = false): React.CSSProperties {
     return {
       width: "100%",
@@ -1366,7 +1549,7 @@ LIKELY CAUSE AREAS
     );
   }
 
-  if (!session) {
+  if (!session && !demoMode) {
     return (
       <div
         style={{
@@ -1374,92 +1557,184 @@ LIKELY CAUSE AREAS
           background: "#0f1724",
           color: "#edf2f7",
           fontFamily: "Inter, Arial, sans-serif",
-          display: "grid",
-          placeItems: "center",
-          padding: 20,
+          padding: 24,
         }}
       >
-        <div
-          style={{
-            width: "100%",
-            maxWidth: 460,
-            background: "#17202d",
-            border: "1px solid #334155",
-            borderRadius: 18,
-            padding: 24,
-          }}
-        >
-          <div style={{ fontSize: 34, fontWeight: 900, marginBottom: 8 }}>
-            Tradesman AI
-          </div>
-          <div style={{ color: "#a8b3c7", marginBottom: 20 }}>
-            Sign in or create your account.
-          </div>
-
-          <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
-            <button
-              onClick={() => setAuthMode("signin")}
+        <div style={{ maxWidth: 1180, margin: "0 auto" }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1.2fr 0.8fr",
+              gap: 24,
+              alignItems: "stretch",
+            }}
+          >
+            <div
               style={{
-                flex: 1,
-                padding: "12px 14px",
-                borderRadius: 12,
+                background: "linear-gradient(180deg, #17202d, #111827)",
                 border: "1px solid #334155",
-                background: authMode === "signin" ? "#9b87f5" : "#1d2939",
-                color: "white",
-                fontWeight: 800,
-                cursor: "pointer",
+                borderRadius: 22,
+                padding: 28,
               }}
             >
-              Sign In
-            </button>
-            <button
-              onClick={() => setAuthMode("signup")}
+              <div
+                style={{
+                  display: "inline-block",
+                  padding: "8px 12px",
+                  borderRadius: 999,
+                  background: "#241f3c",
+                  color: "#c4b5fd",
+                  fontWeight: 800,
+                  marginBottom: 18,
+                }}
+              >
+                AI Business Software for Contractors
+              </div>
+
+              <div style={{ fontSize: 52, fontWeight: 900, lineHeight: 1.05, marginBottom: 16 }}>
+                Build estimates, track jobs, and manage customers faster.
+              </div>
+
+              <div style={{ color: "#a8b3c7", fontSize: 18, lineHeight: 1.6, marginBottom: 24 }}>
+                Tradesman AI helps contractors, mechanics, and service businesses run estimates,
+                invoices, customers, and workflow in one place.
+              </div>
+
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 28 }}>
+                <button onClick={startDemo} style={landingPrimaryBtn()}>
+                  Try Demo
+                </button>
+                <button
+                  onClick={() => {
+                    const el = document.getElementById("auth-box");
+                    el?.scrollIntoView({ behavior: "smooth" });
+                  }}
+                  style={landingSecondaryBtn()}
+                >
+                  Start Free Trial
+                </button>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                  gap: 14,
+                }}
+              >
+                <LandingStat title="Save Time" text="Generate estimates, invoices, scopes, and contracts in minutes." />
+                <LandingStat title="Manage Work" text="Track customers, jobs, estimate history, and invoice history." />
+                <LandingStat title="Grow Revenue" text="Use AI pricing and workflow tools to quote faster and close more jobs." />
+              </div>
+            </div>
+
+            <div
+              id="auth-box"
               style={{
-                flex: 1,
-                padding: "12px 14px",
-                borderRadius: 12,
+                background: "#17202d",
                 border: "1px solid #334155",
-                background: authMode === "signup" ? "#9b87f5" : "#1d2939",
-                color: "white",
-                fontWeight: 800,
-                cursor: "pointer",
+                borderRadius: 22,
+                padding: 24,
               }}
             >
-              Sign Up
-            </button>
-          </div>
+              <div style={{ fontSize: 34, fontWeight: 900, marginBottom: 8 }}>Tradesman AI</div>
+              <div style={{ color: "#a8b3c7", marginBottom: 16 }}>
+                Sign in or create your account.
+              </div>
 
-          <div style={{ display: "grid", gap: 12 }}>
-            <input
-              type="email"
-              placeholder="Email"
-              value={authEmail}
-              onChange={(e) => setAuthEmail(e.target.value)}
-              style={authInputStyle()}
-            />
-            <input
-              type="password"
-              placeholder="Password"
-              value={authPassword}
-              onChange={(e) => setAuthPassword(e.target.value)}
-              style={authInputStyle()}
-            />
-          </div>
+              <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+                <button
+                  onClick={() => setAuthMode("signin")}
+                  style={{
+                    flex: 1,
+                    padding: "12px 14px",
+                    borderRadius: 12,
+                    border: "1px solid #334155",
+                    background: authMode === "signin" ? "#9b87f5" : "#1d2939",
+                    color: "white",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                  }}
+                >
+                  Sign In
+                </button>
+                <button
+                  onClick={() => setAuthMode("signup")}
+                  style={{
+                    flex: 1,
+                    padding: "12px 14px",
+                    borderRadius: 12,
+                    border: "1px solid #334155",
+                    background: authMode === "signup" ? "#9b87f5" : "#1d2939",
+                    color: "white",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                  }}
+                >
+                  Sign Up
+                </button>
+              </div>
 
-          <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
-            {authMode === "signin" ? (
-              <button onClick={handleSignIn} style={authPrimaryBtn()}>
-                Sign In
-              </button>
-            ) : (
-              <button onClick={handleSignUp} style={authPrimaryBtn()}>
-                Create Account
-              </button>
-            )}
-          </div>
+              <div style={{ display: "grid", gap: 12 }}>
+                <input
+                  type="email"
+                  placeholder="Email"
+                  value={authEmail}
+                  onChange={(e) => setAuthEmail(e.target.value)}
+                  style={authInputStyle()}
+                />
+                <input
+                  type="password"
+                  placeholder="Password"
+                  value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)}
+                  style={authInputStyle()}
+                />
+              </div>
 
-          <div style={{ color: "#a8b3c7", marginTop: 14, minHeight: 24 }}>
-            {authMessage}
+              <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
+                {authMode === "signin" ? (
+                  <button onClick={handleSignIn} style={authPrimaryBtn()}>
+                    Sign In
+                  </button>
+                ) : (
+                  <button onClick={handleSignUp} style={authPrimaryBtn()}>
+                    Create Account
+                  </button>
+                )}
+              </div>
+
+              <div style={{ color: "#a8b3c7", marginTop: 14, minHeight: 24 }}>
+                {authMessage}
+              </div>
+
+              <div
+                style={{
+                  marginTop: 22,
+                  padding: 16,
+                  border: "1px solid #334155",
+                  borderRadius: 14,
+                  background: "#111827",
+                }}
+              >
+                <div style={{ fontWeight: 800, marginBottom: 10 }}>Pricing</div>
+                <div style={{ color: "#a8b3c7", lineHeight: 1.7 }}>
+                  <strong>Basic — $19/mo</strong>
+                  <br />
+                  CRM, estimates, invoices, dashboard, PDF export
+                  <br />
+                  <br />
+                  <strong>Pro — $49/mo</strong>
+                  <br />
+                  Everything in Basic + AI Builder, AI pricing, troubleshooting
+                  <br />
+                  <br />
+                  <strong>Team — $99/mo</strong>
+                  <br />
+                  Everything in Pro + team workflow foundation
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1477,6 +1752,30 @@ LIKELY CAUSE AREAS
       }}
     >
       <div style={{ maxWidth: 1260, margin: "0 auto" }}>
+        {demoMode && (
+          <div
+            style={{
+              background: colors.warning,
+              color: "white",
+              borderRadius: 14,
+              padding: 14,
+              marginBottom: 16,
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 12,
+              alignItems: "center",
+              flexWrap: "wrap",
+            }}
+          >
+            <div>
+              <strong>Demo Mode</strong> — This is a read-only preview for marketing and conversions.
+            </div>
+            <button onClick={exitDemo} style={whiteBtn()}>
+              Exit Demo
+            </button>
+          </div>
+        )}
+
         <div
           style={{
             background: `linear-gradient(180deg, ${colors.panelAlt}, ${colors.panelBg})`,
@@ -1494,7 +1793,9 @@ LIKELY CAUSE AREAS
           <div>
             <div style={{ fontSize: 32, fontWeight: 900 }}>Tradesman AI</div>
             <div style={{ color: colors.muted, marginTop: 6 }}>
-              Signed in as {session.user?.email || "user"} • Plan: {profilePlan}
+              {demoMode
+                ? "Demo Preview • Plan: pro"
+                : `Signed in as ${session.user?.email || "user"} • Plan: ${profilePlan}`}
             </div>
           </div>
 
@@ -1505,9 +1806,11 @@ LIKELY CAUSE AREAS
             >
               Switch to {theme === "dark" ? "Light" : "Dark"} Theme
             </button>
-            <button onClick={handleSignOut} style={dangerBtn(colors)}>
-              Sign Out
-            </button>
+            {!demoMode && (
+              <button onClick={handleSignOut} style={dangerBtn(colors)}>
+                Sign Out
+              </button>
+            )}
           </div>
         </div>
 
@@ -1524,95 +1827,61 @@ LIKELY CAUSE AREAS
             Choose Your Plan
           </div>
           <div style={{ color: colors.muted, marginBottom: 16 }}>
-            Basic gives you the core business tools. Pro adds AI Builder and troubleshooting.
+            Better monetization structure with clearer value separation.
           </div>
 
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
               gap: 16,
             }}
           >
-            <div
-              style={{
-                border: `1px solid ${
-                  profilePlan === "basic" ? colors.accent : colors.border
-                }`,
-                borderRadius: 14,
-                padding: 18,
-                background:
-                  profilePlan === "basic" ? colors.accentSoft : colors.outputBg,
-              }}
-            >
-              <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 6 }}>
-                Basic
-              </div>
-              <div style={{ fontSize: 30, fontWeight: 900, marginBottom: 8 }}>
-                $9/mo
-              </div>
-              <div style={{ color: colors.muted, marginBottom: 12 }}>
-                5-day free trial
-              </div>
-              <div style={{ lineHeight: 1.7, marginBottom: 16 }}>
-                • Estimates
-                <br />
-                • Saved Customers
-                <br />
-                • Estimate History
-                <br />
-                • Invoice History
-                <br />
-                • Saved Documents
-                <br />
-                • Contracts
-              </div>
-              <button
-                onClick={() => window.open(BASIC_STRIPE_LINK, "_blank")}
-                style={primaryBtn(colors)}
-              >
-                Start Basic
-              </button>
-            </div>
-
-            <div
-              style={{
-                border: `1px solid ${
-                  profilePlan === "pro" ? colors.accent : colors.border
-                }`,
-                borderRadius: 14,
-                padding: 18,
-                background:
-                  profilePlan === "pro" ? colors.accentSoft : colors.outputBg,
-              }}
-            >
-              <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 6 }}>
-                Pro
-              </div>
-              <div style={{ fontSize: 30, fontWeight: 900, marginBottom: 8 }}>
-                $19/mo
-              </div>
-              <div style={{ color: colors.muted, marginBottom: 12 }}>
-                AI-powered plan
-              </div>
-              <div style={{ lineHeight: 1.7, marginBottom: 16 }}>
-                • Everything in Basic
-                <br />
-                • AI Quick Builder
-                <br />
-                • AI Job Pricing
-                <br />
-                • AI Troubleshooting
-                <br />
-                • Professional PDF exports
-              </div>
-              <button
-                onClick={() => window.open(PRO_STRIPE_LINK, "_blank")}
-                style={primaryBtn(colors)}
-              >
-                Upgrade to Pro
-              </button>
-            </div>
+            <PricingCard
+              title="Basic"
+              price="$19/mo"
+              active={profilePlan === "basic"}
+              colors={colors}
+              features={[
+                "Customers CRM",
+                "Estimate history",
+                "Invoice history",
+                "Dashboard",
+                "PDF export",
+              ]}
+              buttonLabel="Start Basic"
+              buttonAction={() => window.open(BASIC_STRIPE_LINK, "_blank")}
+            />
+            <PricingCard
+              title="Pro"
+              price="$49/mo"
+              active={profilePlan === "pro"}
+              colors={colors}
+              features={[
+                "Everything in Basic",
+                "AI Quick Builder",
+                "AI pricing",
+                "Troubleshooting AI",
+                "Better workflow speed",
+              ]}
+              buttonLabel="Upgrade to Pro"
+              buttonAction={() => window.open(PRO_STRIPE_LINK, "_blank")}
+            />
+            <PricingCard
+              title="Team"
+              price="$99/mo"
+              active={profilePlan === "team"}
+              colors={colors}
+              features={[
+                "Everything in Pro",
+                "Team-ready plan",
+                "Shared workflow foundation",
+                "Multi-user path",
+                "Business-level positioning",
+              ]}
+              buttonLabel="Team Coming Soon"
+              buttonAction={() => setOutput("Team billing will be wired in Round B.")}
+            />
           </div>
         </div>
 
@@ -1631,81 +1900,22 @@ LIKELY CAUSE AREAS
                 Tools
               </div>
 
-              <button
-                style={toolBtnStyle(tool === "dashboard")}
-                onClick={() => setTool("dashboard")}
-              >
-                Dashboard
-              </button>
-              <button
-                style={toolBtnStyle(tool === "settings")}
-                onClick={() => setTool("settings")}
-              >
-                Company Settings
-              </button>
-              <button
-                style={toolBtnStyle(tool === "customers")}
-                onClick={() => setTool("customers")}
-              >
-                Customers
-              </button>
-              <button
-                style={toolBtnStyle(tool === "estimate")}
-                onClick={() => setTool("estimate")}
-              >
-                Estimate Generator
-              </button>
-              <button
-                style={toolBtnStyle(tool === "estimates")}
-                onClick={() => setTool("estimates")}
-              >
-                Estimate History
-              </button>
-              <button
-                style={toolBtnStyle(tool === "invoice")}
-                onClick={() => setTool("invoice")}
-              >
-                Invoice Builder
-              </button>
-              <button
-                style={toolBtnStyle(tool === "invoices")}
-                onClick={() => setTool("invoices")}
-              >
-                Invoice History
-              </button>
-              <button
-                style={toolBtnStyle(tool === "saved")}
-                onClick={() => setTool("saved")}
-              >
-                Saved Docs
-              </button>
-              <button
-                style={toolBtnStyle(tool === "aiBuilder", !isPro())}
-                onClick={() => setTool("aiBuilder")}
-              >
-                AI Quick Builder (Pro)
-              </button>
-              <button
-                style={toolBtnStyle(tool === "scope")}
-                onClick={() => setTool("scope")}
-              >
-                Scope Writer
-              </button>
-              <button
-                style={toolBtnStyle(tool === "contract")}
-                onClick={() => setTool("contract")}
-              >
-                Contract Builder
-              </button>
-              <button
-                style={toolBtnStyle(tool === "troubleshoot", !isPro())}
-                onClick={() => setTool("troubleshoot")}
-              >
-                Troubleshooting (Pro)
-              </button>
+              <button style={toolBtnStyle(tool === "dashboard")} onClick={() => setTool("dashboard")}>Dashboard</button>
+              <button style={toolBtnStyle(tool === "settings")} onClick={() => setTool("settings")}>Company Settings</button>
+              <button style={toolBtnStyle(tool === "customers")} onClick={() => setTool("customers")}>Customers</button>
+              <button style={toolBtnStyle(tool === "customerDetail")} onClick={() => setTool("customerDetail")}>Customer Timeline</button>
+              <button style={toolBtnStyle(tool === "estimate")} onClick={() => setTool("estimate")}>Estimate Generator</button>
+              <button style={toolBtnStyle(tool === "estimates")} onClick={() => setTool("estimates")}>Estimate History</button>
+              <button style={toolBtnStyle(tool === "invoice")} onClick={() => setTool("invoice")}>Invoice Builder</button>
+              <button style={toolBtnStyle(tool === "invoices")} onClick={() => setTool("invoices")}>Invoice History</button>
+              <button style={toolBtnStyle(tool === "saved")} onClick={() => setTool("saved")}>Saved Docs</button>
+              <button style={toolBtnStyle(tool === "aiBuilder", !isPro())} onClick={() => setTool("aiBuilder")}>AI Quick Builder (Pro+)</button>
+              <button style={toolBtnStyle(tool === "scope")} onClick={() => setTool("scope")}>Scope Writer</button>
+              <button style={toolBtnStyle(tool === "contract")} onClick={() => setTool("contract")}>Contract Builder</button>
+              <button style={toolBtnStyle(tool === "troubleshoot", !isPro())} onClick={() => setTool("troubleshoot")}>Troubleshooting (Pro+)</button>
 
               <div style={{ marginTop: 12, color: colors.muted, fontSize: 13 }}>
-                Cloud sync: {cloudLoading ? "Loading..." : "Connected"}
+                {demoMode ? "Demo preview active" : `Cloud sync: ${cloudLoading ? "Loading..." : "Connected"}`}
               </div>
             </div>
           </div>
@@ -1756,9 +1966,7 @@ LIKELY CAUSE AREAS
                         </div>
                       </div>
                     ))}
-                    {estimates.length === 0 && (
-                      <div style={{ color: colors.muted }}>No estimates yet.</div>
-                    )}
+                    {estimates.length === 0 && <div style={{ color: colors.muted }}>No estimates yet.</div>}
                   </div>
 
                   <div
@@ -1778,9 +1986,7 @@ LIKELY CAUSE AREAS
                         </div>
                       </div>
                     ))}
-                    {invoices.length === 0 && (
-                      <div style={{ color: colors.muted }}>No invoices yet.</div>
-                    )}
+                    {invoices.length === 0 && <div style={{ color: colors.muted }}>No invoices yet.</div>}
                   </div>
                 </div>
               </Card>
@@ -1830,6 +2036,7 @@ LIKELY CAUSE AREAS
                         <div style={{ color: colors.muted, marginTop: 6 }}>{c.address || ""}</div>
                         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
                           <button onClick={() => useCustomer(c)} style={secondaryBtn(colors)}>Use</button>
+                          <button onClick={() => openCustomerDetail(c)} style={secondaryBtn(colors)}>Open Timeline</button>
                           <button onClick={() => editCustomer(c)} style={secondaryBtn(colors)}>Edit</button>
                           <button onClick={() => void deleteCustomer(c.id)} style={dangerBtn(colors)}>Delete</button>
                         </div>
@@ -1837,6 +2044,144 @@ LIKELY CAUSE AREAS
                     ))
                   )}
                 </div>
+              </Card>
+            )}
+
+            {tool === "customerDetail" && (
+              <Card title="Customer Detail + Job Timeline" colors={colors}>
+                <div style={{ marginBottom: 16 }}>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: 13,
+                      marginBottom: 6,
+                      fontWeight: 700,
+                      color: colors.muted,
+                    }}
+                  >
+                    Choose Customer
+                  </label>
+                  <select
+                    value={selectedCustomerId}
+                    onChange={(e) => setSelectedCustomerId(e.target.value)}
+                    style={inputStyle(colors)}
+                  >
+                    <option value="">Select a customer</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {!selectedCustomer ? (
+                  <div style={{ color: colors.muted }}>Select a customer to view their timeline.</div>
+                ) : (
+                  <>
+                    <div
+                      style={{
+                        background: colors.outputBg,
+                        border: `1px solid ${colors.border}`,
+                        borderRadius: 12,
+                        padding: 16,
+                        marginBottom: 18,
+                      }}
+                    >
+                      <div style={{ fontSize: 22, fontWeight: 900 }}>{selectedCustomer.name}</div>
+                      <div style={{ color: colors.muted, marginTop: 6 }}>
+                        {selectedCustomer.company || "No company"} • {selectedCustomer.phone || "No phone"} • {selectedCustomer.email || "No email"}
+                      </div>
+                      <div style={{ color: colors.muted, marginTop: 6 }}>
+                        {selectedCustomer.address || "No address"}
+                      </div>
+                      <div style={{ marginTop: 10 }}>{selectedCustomer.notes || "No notes."}</div>
+
+                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+                        <button onClick={() => useCustomer(selectedCustomer)} style={secondaryBtn(colors)}>Use Customer</button>
+                        <button onClick={() => editCustomer(selectedCustomer)} style={secondaryBtn(colors)}>Edit Customer</button>
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                        gap: 16,
+                      }}
+                    >
+                      <TimelinePanel
+                        title="Estimates"
+                        colors={colors}
+                        emptyText="No estimates for this customer."
+                      >
+                        {selectedCustomerEstimates.map((e) => (
+                          <TimelineItem
+                            key={e.id}
+                            title={e.jobDescription}
+                            meta={`${e.status} • ${currency(e.aiPrice)} • ${e.createdAt}`}
+                          />
+                        ))}
+                      </TimelinePanel>
+
+                      <TimelinePanel
+                        title="Invoices"
+                        colors={colors}
+                        emptyText="No invoices for this customer."
+                      >
+                        {selectedCustomerInvoices.map((i) => (
+                          <TimelineItem
+                            key={i.id}
+                            title={`${i.invoiceNumber || "Invoice"} — ${i.jobName}`}
+                            meta={`${i.status} • ${currency(i.total)} • ${i.createdAt}`}
+                          />
+                        ))}
+                      </TimelinePanel>
+
+                      <TimelinePanel
+                        title="Documents"
+                        colors={colors}
+                        emptyText="No documents for this customer."
+                      >
+                        {selectedCustomerDocs.map((d) => (
+                          <TimelineItem
+                            key={d.id}
+                            title={d.title}
+                            meta={`${d.type} • ${d.createdAt}`}
+                          />
+                        ))}
+                      </TimelinePanel>
+
+                      <TimelinePanel
+                        title="Customer Summary"
+                        colors={colors}
+                        emptyText=""
+                      >
+                        <div style={{ lineHeight: 1.8 }}>
+                          <div>Estimates: {selectedCustomerEstimates.length}</div>
+                          <div>Invoices: {selectedCustomerInvoices.length}</div>
+                          <div>Docs: {selectedCustomerDocs.length}</div>
+                          <div>
+                            Approved / Paid Estimate Value:{" "}
+                            {currency(
+                              selectedCustomerEstimates
+                                .filter((e) => e.status === "approved" || e.status === "paid")
+                                .reduce((sum, e) => sum + e.aiPrice, 0)
+                            )}
+                          </div>
+                          <div>
+                            Paid Invoice Value:{" "}
+                            {currency(
+                              selectedCustomerInvoices
+                                .filter((i) => i.status === "paid")
+                                .reduce((sum, i) => sum + i.total, 0)
+                            )}
+                          </div>
+                        </div>
+                      </TimelinePanel>
+                    </div>
+                  </>
+                )}
               </Card>
             )}
 
@@ -2005,7 +2350,7 @@ LIKELY CAUSE AREAS
             )}
 
             {tool === "aiBuilder" && (
-              <Card title="AI Quick Builder (Pro)" colors={colors}>
+              <Card title="AI Quick Builder (Pro / Team)" colors={colors}>
                 <Grid>
                   <Field label="Customer Name" value={aiBuilder.customerName} onChange={(v) => setAiBuilder({ ...aiBuilder, customerName: v })} colors={colors} />
                   <Field label="Project Type" value={aiBuilder.projectType} onChange={(v) => setAiBuilder({ ...aiBuilder, projectType: v })} colors={colors} />
@@ -2041,7 +2386,7 @@ LIKELY CAUSE AREAS
             )}
 
             {tool === "troubleshoot" && (
-              <Card title="Troubleshooting Assistant (Pro)" colors={colors}>
+              <Card title="Troubleshooting Assistant (Pro / Team)" colors={colors}>
                 <Field label="Machine / Vehicle" value={trouble.machine} onChange={(v) => setTrouble({ ...trouble, machine: v })} colors={colors} />
                 <Area label="Main Symptom" value={trouble.symptom} onChange={(v) => setTrouble({ ...trouble, symptom: v })} colors={colors} />
                 <Area label="Recent Work / Relevant History" value={trouble.recentWork} onChange={(v) => setTrouble({ ...trouble, recentWork: v })} colors={colors} />
@@ -2052,7 +2397,8 @@ LIKELY CAUSE AREAS
               tool !== "customers" &&
               tool !== "saved" &&
               tool !== "estimates" &&
-              tool !== "invoices" && (
+              tool !== "invoices" &&
+              tool !== "customerDetail" && (
                 <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
                   {tool !== "aiBuilder" && (
                     <button onClick={generateFromActiveTool} style={primaryBtn(colors)}>
@@ -2174,6 +2520,98 @@ LIKELY CAUSE AREAS
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function PricingCard({
+  title,
+  price,
+  active,
+  colors,
+  features,
+  buttonLabel,
+  buttonAction,
+}: {
+  title: string;
+  price: string;
+  active: boolean;
+  colors: any;
+  features: string[];
+  buttonLabel: string;
+  buttonAction: () => void;
+}) {
+  return (
+    <div
+      style={{
+        border: `1px solid ${active ? colors.accent : colors.border}`,
+        borderRadius: 14,
+        padding: 18,
+        background: active ? colors.accentSoft : colors.outputBg,
+      }}
+    >
+      <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 6 }}>{title}</div>
+      <div style={{ fontSize: 30, fontWeight: 900, marginBottom: 12 }}>{price}</div>
+      <div style={{ lineHeight: 1.7, marginBottom: 16 }}>
+        {features.map((f) => (
+          <div key={f}>• {f}</div>
+        ))}
+      </div>
+      <button onClick={buttonAction} style={primaryBtn(colors)}>
+        {buttonLabel}
+      </button>
+    </div>
+  );
+}
+
+function LandingStat({ title, text }: { title: string; text: string }) {
+  return (
+    <div
+      style={{
+        background: "#111827",
+        border: "1px solid #334155",
+        borderRadius: 16,
+        padding: 16,
+      }}
+    >
+      <div style={{ fontWeight: 900, marginBottom: 8 }}>{title}</div>
+      <div style={{ color: "#a8b3c7", lineHeight: 1.6 }}>{text}</div>
+    </div>
+  );
+}
+
+function TimelinePanel({
+  title,
+  colors,
+  children,
+  emptyText,
+}: {
+  title: string;
+  colors: any;
+  children: React.ReactNode;
+  emptyText: string;
+}) {
+  const hasChildren = React.Children.count(children) > 0;
+  return (
+    <div
+      style={{
+        background: colors.outputBg,
+        border: `1px solid ${colors.border}`,
+        borderRadius: 12,
+        padding: 14,
+      }}
+    >
+      <div style={{ fontWeight: 800, marginBottom: 10 }}>{title}</div>
+      {hasChildren ? children : <div style={{ color: colors.muted }}>{emptyText}</div>}
+    </div>
+  );
+}
+
+function TimelineItem({ title, meta }: { title: string; meta: string }) {
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <div>{title}</div>
+      <div style={{ color: "#98a2b3", fontSize: 13 }}>{meta}</div>
     </div>
   );
 }
@@ -2387,5 +2825,41 @@ function authPrimaryBtn(): React.CSSProperties {
     fontWeight: 800,
     cursor: "pointer",
     width: "100%",
+  };
+}
+
+function landingPrimaryBtn(): React.CSSProperties {
+  return {
+    background: "#9b87f5",
+    color: "white",
+    border: "none",
+    borderRadius: 14,
+    padding: "14px 20px",
+    fontWeight: 900,
+    cursor: "pointer",
+  };
+}
+
+function landingSecondaryBtn(): React.CSSProperties {
+  return {
+    background: "transparent",
+    color: "white",
+    border: "1px solid #475467",
+    borderRadius: 14,
+    padding: "14px 20px",
+    fontWeight: 800,
+    cursor: "pointer",
+  };
+}
+
+function whiteBtn(): React.CSSProperties {
+  return {
+    background: "white",
+    color: "#111827",
+    border: "none",
+    borderRadius: 10,
+    padding: "10px 14px",
+    fontWeight: 800,
+    cursor: "pointer",
   };
 }
