@@ -129,9 +129,8 @@ type AiBuilderForm = {
   prompt: string;
 };
 
-const SETTINGS_KEY = "tradesman_ai_company_settings_v9";
-const THEME_KEY = "tradesman_ai_theme_v9";
-const PLAN_KEY = "tradesman_ai_plan_v9";
+const SETTINGS_KEY = "tradesman_ai_company_settings_v10";
+const THEME_KEY = "tradesman_ai_theme_v10";
 
 const defaultSettings: CompanySettings = {
   companyName: "Your Company",
@@ -164,17 +163,9 @@ function getInitialTheme(): ThemeMode {
   }
 }
 
-function getInitialPlan(): Plan {
-  try {
-    const saved = localStorage.getItem(PLAN_KEY);
-    return saved === "pro" ? "pro" : "basic";
-  } catch {
-    return "basic";
-  }
-}
-
 export default function App() {
   const [session, setSession] = useState<any>(null);
+  const [profilePlan, setProfilePlan] = useState<Plan>("basic");
   const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
@@ -182,7 +173,6 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(true);
 
   const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
-  const [plan, setPlan] = useState<Plan>(getInitialPlan);
   const [tool, setTool] = useState<Tool>("dashboard");
   const [output, setOutput] = useState("Your generated output will appear here.");
 
@@ -300,7 +290,7 @@ export default function App() {
     });
 
     const authListener = supabase.auth.onAuthStateChange(
-      (_event: any, nextSession: any) => {
+      async (_event: any, nextSession: any) => {
         setSession(nextSession);
         setAuthLoading(false);
       }
@@ -321,21 +311,54 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => {
-    localStorage.setItem(PLAN_KEY, plan);
-  }, [plan]);
-
-  useEffect(() => {
     if (session?.user?.id) {
-      void loadCloudData(session.user.id);
+      void bootUser(session.user);
     } else {
       setCustomers([]);
       setSavedDocs([]);
+      setProfilePlan("basic");
     }
   }, [session]);
 
-  async function loadCloudData(userId: string) {
-    setCloudLoading(true);
+  async function ensureProfile(user: any) {
+    const existing = await supabase
+      .from("profiles")
+      .select("id, email, plan")
+      .eq("id", user.id)
+      .maybeSingle();
 
+    if (existing.error) {
+      setOutput(`Profile load failed: ${existing.error.message}`);
+      return "basic" as Plan;
+    }
+
+    if (!existing.data) {
+      const inserted = await supabase.from("profiles").insert({
+        id: user.id,
+        email: user.email || "",
+        plan: "basic",
+      });
+
+      if (inserted.error) {
+        setOutput(`Profile create failed: ${inserted.error.message}`);
+        return "basic" as Plan;
+      }
+
+      return "basic" as Plan;
+    }
+
+    return (existing.data.plan === "pro" ? "pro" : "basic") as Plan;
+  }
+
+  async function bootUser(user: any) {
+    setCloudLoading(true);
+    const plan = await ensureProfile(user);
+    setProfilePlan(plan);
+    await loadCloudData(user.id);
+    setCloudLoading(false);
+  }
+
+  async function loadCloudData(userId: string) {
     const [customersResult, docsResult] = await Promise.all([
       supabase
         .from("customers")
@@ -375,8 +398,6 @@ export default function App() {
       }));
       setSavedDocs(mappedDocs);
     }
-
-    setCloudLoading(false);
   }
 
   const colors = useMemo(() => {
@@ -430,11 +451,6 @@ export default function App() {
     return {
       cubicYards,
       tons,
-      laborCost,
-      equipmentCost,
-      materialCost,
-      directCost,
-      markupAmount,
       total,
     };
   }, [estimate]);
@@ -497,6 +513,10 @@ export default function App() {
   async function handleSignOut() {
     await supabase.auth.signOut();
     setAuthMessage("");
+  }
+
+  function isPro() {
+    return profilePlan === "pro";
   }
 
   function exportPDF() {
@@ -572,15 +592,7 @@ export default function App() {
     }
 
     await loadCloudData(session.user.id);
-    setOutput(`DOCUMENT SAVED
-
-Title:
-${title || `${type} document`}
-
-Customer:
-${customerName || "Not specified"}
-
-Saved to cloud successfully.`);
+    setOutput("Document saved to cloud.");
   }
 
   function loadSavedDoc(doc: SavedDoc) {
@@ -696,21 +708,6 @@ Saved to cloud successfully.`);
       mobilization: settings.mobilizationDefault,
       dumpFees: settings.dumpFeesDefault,
     }));
-
-    setInvoice((prev) => ({
-      ...prev,
-      taxPercent: settings.taxPercent,
-      items: [
-        { description: "Labor", quantity: 8, unitPrice: settings.laborRate },
-        { description: "Equipment", quantity: 6, unitPrice: settings.equipmentRate },
-        {
-          description: "Material Delivery",
-          quantity: 20,
-          unitPrice: settings.materialPricePerTon,
-        },
-      ],
-    }));
-
     setOutput("Company settings saved locally.");
   }
 
@@ -721,7 +718,7 @@ Saved to cloud successfully.`);
   }
 
   function aiBuildEstimate() {
-    if (plan !== "pro") {
+    if (!isPro()) {
       setOutput("AI Builder is a Pro feature. Upgrade to Pro to unlock it.");
       return;
     }
@@ -750,133 +747,41 @@ Saved to cloud successfully.`);
       ? "Road Base"
       : estimate.material;
 
-    const laborHours =
-      text.includes("demo") || text.includes("remove")
-        ? 12
-        : text.includes("pad")
-        ? 8
-        : text.includes("driveway")
-        ? 10
-        : 8;
-
-    const equipmentHours =
-      text.includes("demo") || text.includes("remove")
-        ? 10
-        : text.includes("driveway")
-        ? 8
-        : 6;
-
-    const newEstimate = {
-      ...estimate,
+    setEstimate((prev) => ({
+      ...prev,
       customerName: aiBuilder.customerName,
       jobType: aiBuilder.projectType,
       length,
       width,
       depthInches: depth,
       material,
-      laborHours,
-      equipmentHours,
       notes: `AI-generated from prompt: ${aiBuilder.prompt}`,
-    };
+    }));
 
-    setEstimate(newEstimate);
     setTool("estimate");
-
-    const cubicFeet = newEstimate.length * newEstimate.width * (newEstimate.depthInches / 12);
-    const cubicYards = cubicFeet / 27;
-    const tons = cubicYards * 1.4;
-    const laborCost = newEstimate.laborHours * newEstimate.laborRate;
-    const equipmentCost = newEstimate.equipmentHours * newEstimate.equipmentRate;
-    const materialCost = tons * newEstimate.materialPricePerTon;
-    const directCost =
-      laborCost +
-      equipmentCost +
-      materialCost +
-      newEstimate.mobilization +
-      newEstimate.dumpFees;
-    const markupAmount = directCost * (newEstimate.markupPercent / 100);
-    const total = directCost + markupAmount;
-
-    setOutput(`AI ESTIMATE BUILDER
-
-Customer:
-${newEstimate.customerName || "Not specified"}
-
-Prompt:
-${aiBuilder.prompt}
-
-AI Interpreted Job:
-${newEstimate.jobType}
-
-Dimensions:
-${newEstimate.length} ft x ${newEstimate.width} ft x ${newEstimate.depthInches} in
-
-Material:
-${newEstimate.material}
-
-Estimated Volume:
-${cubicYards.toFixed(2)} cubic yards
-
-Estimated Tonnage:
-${tons.toFixed(2)} tons
-
-Estimated Labor:
-${newEstimate.laborHours} hours
-
-Estimated Equipment:
-${newEstimate.equipmentHours} hours
-
-Estimated Total:
-${currency(total)}
-
-This estimate draft has also been pushed into the Estimate Generator form for refinement.`);
+    setOutput("AI estimate draft built and pushed into the Estimate Generator.");
   }
 
   function aiBuildScope() {
-    if (plan !== "pro") {
+    if (!isPro()) {
       setOutput("AI Builder is a Pro feature. Upgrade to Pro to unlock it.");
       return;
     }
 
     const projectName = aiBuilder.projectType || "Project";
-    const description = `Provide labor, equipment, site preparation, grading, and material placement for ${projectName.toLowerCase()} as described by customer request. Work to include layout, material handling, grading, and finish work as required for normal completion of the described task.`;
-    const materials = aiBuilder.prompt.toLowerCase().includes("concrete")
-      ? "Concrete materials, subgrade prep, and associated labor/equipment as required."
-      : aiBuilder.prompt.toLowerCase().includes("gravel") ||
-        aiBuilder.prompt.toLowerCase().includes("road base")
-      ? "Road base / gravel material, delivery, placement, grading, and compaction."
-      : "Standard materials and equipment necessary to complete the described work.";
+    const description = `Provide labor, equipment, site preparation, grading, and material placement for ${projectName.toLowerCase()} as described by customer request.`;
 
-    const newScope = {
-      ...scope,
+    setScope((prev) => ({
+      ...prev,
       customerName: aiBuilder.customerName,
       projectName,
       jobDescription: description,
-      materials,
+      materials: "Standard materials and equipment necessary to complete the described work.",
       customerNotes: aiBuilder.prompt,
-    };
+    }));
 
-    setScope(newScope);
     setTool("scope");
-
-    setOutput(`AI SCOPE BUILDER
-
-Customer:
-${newScope.customerName || "Not specified"}
-
-Project:
-${newScope.projectName}
-
-Original Prompt:
-${aiBuilder.prompt}
-
-Generated Work Description:
-${newScope.jobDescription}
-
-Generated Materials Section:
-${newScope.materials}
-
-This scope draft has also been pushed into the Scope Writer form for refinement.`);
+    setOutput("AI scope draft built and pushed into the Scope Writer.");
   }
 
   function generateEstimate() {
@@ -949,15 +854,6 @@ ${scope.exclusions}`);
     const tax = subtotal * (invoice.taxPercent / 100);
     const total = subtotal + tax;
 
-    const lineItems = invoice.items
-      .map(
-        (item, index) =>
-          `${index + 1}. ${item.description} — Qty: ${item.quantity} × ${currency(
-            item.unitPrice
-          )} = ${currency(item.quantity * item.unitPrice)}`
-      )
-      .join("\n");
-
     setOutput(`INVOICE / QUOTE
 
 Customer:
@@ -965,8 +861,6 @@ ${invoice.customerName || "Not specified"}
 
 Job:
 ${invoice.jobName || "Not specified"}
-
-${lineItems}
 
 TOTAL DUE:
 ${currency(total)}
@@ -1001,7 +895,7 @@ ${contract.signatures}`);
   }
 
   function generateTroubleshoot() {
-    if (plan !== "pro") {
+    if (!isPro()) {
       setOutput("Troubleshooting Assistant is a Pro feature.");
       return;
     }
@@ -1201,7 +1095,7 @@ LIKELY CAUSE AREAS
           <div>
             <div style={{ fontSize: 32, fontWeight: 900 }}>Tradesman AI</div>
             <div style={{ color: colors.muted, marginTop: 6 }}>
-              Signed in as {session.user?.email || "user"}
+              Signed in as {session.user?.email || "user"} • Plan: {profilePlan}
             </div>
           </div>
 
@@ -1241,10 +1135,10 @@ LIKELY CAUSE AREAS
           >
             <div
               style={{
-                border: `1px solid ${plan === "basic" ? colors.accent : colors.border}`,
+                border: `1px solid ${profilePlan === "basic" ? colors.accent : colors.border}`,
                 borderRadius: 14,
                 padding: 18,
-                background: plan === "basic" ? colors.accentSoft : colors.outputBg,
+                background: profilePlan === "basic" ? colors.accentSoft : colors.outputBg,
               }}
             >
               <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 6 }}>Basic</div>
@@ -1263,25 +1157,20 @@ LIKELY CAUSE AREAS
                 <br />
                 • Saved Jobs / Documents
               </div>
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <button onClick={() => setPlan("basic")} style={secondaryBtn(colors)}>
-                  Use Basic View
-                </button>
-                <button
-                  onClick={() => window.open(BASIC_STRIPE_LINK, "_blank")}
-                  style={primaryBtn(colors)}
-                >
-                  Start Basic
-                </button>
-              </div>
+              <button
+                onClick={() => window.open(BASIC_STRIPE_LINK, "_blank")}
+                style={primaryBtn(colors)}
+              >
+                Start Basic
+              </button>
             </div>
 
             <div
               style={{
-                border: `1px solid ${plan === "pro" ? colors.accent : colors.border}`,
+                border: `1px solid ${profilePlan === "pro" ? colors.accent : colors.border}`,
                 borderRadius: 14,
                 padding: 18,
-                background: plan === "pro" ? colors.accentSoft : colors.outputBg,
+                background: profilePlan === "pro" ? colors.accentSoft : colors.outputBg,
               }}
             >
               <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 6 }}>Pro</div>
@@ -1296,17 +1185,12 @@ LIKELY CAUSE AREAS
                 <br />
                 • Professional PDF exports
               </div>
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <button onClick={() => setPlan("pro")} style={secondaryBtn(colors)}>
-                  Use Pro View
-                </button>
-                <button
-                  onClick={() => window.open(PRO_STRIPE_LINK, "_blank")}
-                  style={primaryBtn(colors)}
-                >
-                  Upgrade to Pro
-                </button>
-              </div>
+              <button
+                onClick={() => window.open(PRO_STRIPE_LINK, "_blank")}
+                style={primaryBtn(colors)}
+              >
+                Upgrade to Pro
+              </button>
             </div>
           </div>
         </div>
@@ -1328,12 +1212,12 @@ LIKELY CAUSE AREAS
               <button style={toolBtnStyle(tool === "settings")} onClick={() => setTool("settings")}>Company Settings</button>
               <button style={toolBtnStyle(tool === "customers")} onClick={() => setTool("customers")}>Customers</button>
               <button style={toolBtnStyle(tool === "saved")} onClick={() => setTool("saved")}>Saved Jobs / Docs</button>
-              <button style={toolBtnStyle(tool === "aiBuilder", plan !== "pro")} onClick={() => setTool("aiBuilder")}>AI Quick Builder (Pro)</button>
+              <button style={toolBtnStyle(tool === "aiBuilder", !isPro())} onClick={() => setTool("aiBuilder")}>AI Quick Builder (Pro)</button>
               <button style={toolBtnStyle(tool === "estimate")} onClick={() => setTool("estimate")}>Estimate Generator</button>
               <button style={toolBtnStyle(tool === "scope")} onClick={() => setTool("scope")}>Scope Writer</button>
               <button style={toolBtnStyle(tool === "invoice")} onClick={() => setTool("invoice")}>Invoice Builder</button>
               <button style={toolBtnStyle(tool === "contract")} onClick={() => setTool("contract")}>Contract Builder</button>
-              <button style={toolBtnStyle(tool === "troubleshoot", plan !== "pro")} onClick={() => setTool("troubleshoot")}>Troubleshooting (Pro)</button>
+              <button style={toolBtnStyle(tool === "troubleshoot", !isPro())} onClick={() => setTool("troubleshoot")}>Troubleshooting (Pro)</button>
 
               <div
                 style={{
@@ -1357,7 +1241,7 @@ LIKELY CAUSE AREAS
                     gap: 12,
                   }}
                 >
-                  <Metric label="Plan" value={plan === "pro" ? "Pro" : "Basic"} colors={colors} />
+                  <Metric label="Plan" value={profilePlan} colors={colors} />
                   <Metric label="Customers" value={String(customers.length)} colors={colors} />
                   <Metric label="Saved Docs" value={String(savedDocs.length)} colors={colors} />
                   <Metric label="Labor Rate" value={currency(settings.laborRate)} colors={colors} />
