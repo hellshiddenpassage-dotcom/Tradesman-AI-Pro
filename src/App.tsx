@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from "react";
 
 const BASIC_STRIPE_LINK = "https://buy.stripe.com/eVqdR26372Cb7BW8Y5d7q03";
 const PRO_STRIPE_LINK = "https://buy.stripe.com/dRmfZa3UZa4D7BWgqxd7q04";
-const _TEAM_STRIPE_LINK = "#";
 
 const SUPABASE_URL = "https://ljizlaabarhyzocfcsba.supabase.co";
 const SUPABASE_ANON_KEY =
