@@ -10,6 +10,7 @@ type Tool =
   | "settings"
   | "customers"
   | "saved"
+  | "aiBuilder"
   | "estimate"
   | "scope"
   | "invoice"
@@ -115,11 +116,17 @@ type TroubleForm = {
   severity: string;
 };
 
-const SETTINGS_KEY = "tradesman_ai_company_settings_v5";
-const THEME_KEY = "tradesman_ai_theme_v5";
-const PLAN_KEY = "tradesman_ai_plan_v5";
-const CUSTOMERS_KEY = "tradesman_ai_customers_v5";
-const DOCS_KEY = "tradesman_ai_saved_docs_v5";
+type AiBuilderForm = {
+  customerName: string;
+  projectType: string;
+  prompt: string;
+};
+
+const SETTINGS_KEY = "tradesman_ai_company_settings_v6";
+const THEME_KEY = "tradesman_ai_theme_v6";
+const PLAN_KEY = "tradesman_ai_plan_v6";
+const CUSTOMERS_KEY = "tradesman_ai_customers_v6";
+const DOCS_KEY = "tradesman_ai_saved_docs_v6";
 
 const defaultSettings: CompanySettings = {
   companyName: "Your Company",
@@ -203,6 +210,12 @@ export default function App() {
     email: "",
     address: "",
     notes: "",
+  });
+
+  const [aiBuilder, setAiBuilder] = useState<AiBuilderForm>({
+    customerName: "",
+    projectType: "Shop Pad / Gravel",
+    prompt: "",
   });
 
   const [estimate, setEstimate] = useState<EstimateForm>({
@@ -321,7 +334,6 @@ export default function App() {
         outputBg: "#f8fafc",
         inputBg: "#ffffff",
         danger: "#b42318",
-        success: "#067647",
       };
     }
 
@@ -337,7 +349,6 @@ export default function App() {
       outputBg: "#111827",
       inputBg: "#0f1724",
       danger: "#ef4444",
-      success: "#22c55e",
     };
   }, [theme]);
 
@@ -449,221 +460,10 @@ export default function App() {
       y += 2;
     };
 
-    const addKeyValue = (label: string, value: string) => {
-      ensurePage(6);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(10);
-      doc.text(`${label}:`, left, y);
-      doc.setFont("helvetica", "normal");
-      doc.text(value || "-", left + 38, y);
-      y += 6;
-    };
-
-    const addMoneyRow = (label: string, value: string, bold = false) => {
-      ensurePage(6);
-      doc.setFont("helvetica", bold ? "bold" : "normal");
-      doc.setFontSize(10);
-      doc.text(label, left, y);
-      doc.text(value, right, y, { align: "right" });
-      y += 6;
-    };
-
-    const addLineItemTable = () => {
-      addSection("Line Items");
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(10);
-      doc.text("Description", left, y);
-      doc.text("Qty", 120, y);
-      doc.text("Unit", 150, y);
-      doc.text("Total", right, y, { align: "right" });
-      y += 4;
-      doc.line(left, y, right, y);
-      y += 5;
-
-      invoice.items.forEach((item) => {
-        ensurePage(8);
-        const total = item.quantity * item.unitPrice;
-        const lines = doc.splitTextToSize(item.description || "-", 95);
-        doc.setFont("helvetica", "normal");
-        doc.text(lines, left, y);
-        doc.text(String(item.quantity), 120, y);
-        doc.text(currency(item.unitPrice), 150, y);
-        doc.text(currency(total), right, y, { align: "right" });
-        y += Math.max(lines.length * 5, 6);
-        y += 2;
-      });
-    };
-
-    if (tool === "estimate") {
-      addHeader("Estimate", estimate.jobType || "Job Estimate");
-      addSection("Customer");
-      addKeyValue("Customer Name", estimate.customerName || "Not specified");
-      addKeyValue("Site Address", estimate.siteAddress || "Not specified");
-
-      addSection("Project Information");
-      addKeyValue("Job Type", estimate.jobType);
-      addKeyValue(
-        "Dimensions",
-        `${estimate.length} ft × ${estimate.width} ft × ${estimate.depthInches} in`
-      );
-      addKeyValue("Material", estimate.material);
-      addKeyValue("Volume", `${num(estimateMath.cubicYards)} cubic yards`);
-      addKeyValue("Estimated Tons", `${num(estimateMath.tons)} tons`);
-
-      addSection("Cost Breakdown");
-      addMoneyRow(
-        `Labor (${estimate.laborHours} hrs @ ${currency(estimate.laborRate)}/hr)`,
-        currency(estimateMath.laborCost)
-      );
-      addMoneyRow(
-        `Equipment (${estimate.equipmentHours} hrs @ ${currency(
-          estimate.equipmentRate
-        )}/hr)`,
-        currency(estimateMath.equipmentCost)
-      );
-      addMoneyRow(
-        `Material (${num(estimateMath.tons)} tons @ ${currency(
-          estimate.materialPricePerTon
-        )}/ton)`,
-        currency(estimateMath.materialCost)
-      );
-      addMoneyRow("Mobilization", currency(estimate.mobilization));
-      addMoneyRow("Dump Fees", currency(estimate.dumpFees));
-      addMoneyRow("Direct Cost", currency(estimateMath.directCost));
-      addMoneyRow(
-        `Markup (${estimate.markupPercent}%)`,
-        currency(estimateMath.markupAmount)
-      );
-      addMoneyRow("Total Estimate", currency(estimateMath.total), true);
-
-      addSection("Notes");
-      addTextBlock(estimate.notes || "No additional notes entered.");
-
-      doc.save("TradesmanAI_Estimate.pdf");
-      return;
-    }
-
-    if (tool === "scope") {
-      addHeader("Scope of Work", scope.projectName || "Project Scope");
-      addSection("Customer");
-      addKeyValue("Customer Name", scope.customerName || "Not specified");
-
-      addSection("Project Information");
-      addKeyValue("Project Name", scope.projectName || "Not specified");
-
-      addSection("Work Description");
-      addTextBlock(scope.jobDescription || "No description entered.");
-
-      addSection("Materials / Inclusions");
-      addTextBlock(
-        scope.materials || "To be determined based on final conditions and approval."
-      );
-
-      addSection("Customer Notes / Site Conditions");
-      addTextBlock(scope.customerNotes || "No customer notes entered.");
-
-      addSection("Timeline");
-      addTextBlock(scope.timeline);
-
-      addSection("Exclusions");
-      addTextBlock(scope.exclusions);
-
-      doc.save("TradesmanAI_ScopeOfWork.pdf");
-      return;
-    }
-
-    if (tool === "invoice") {
-      const subtotal = invoice.items.reduce(
-        (sum, item) => sum + item.quantity * item.unitPrice,
-        0
-      );
-      const tax = subtotal * (invoice.taxPercent / 100);
-      const total = subtotal + tax;
-
-      addHeader("Invoice / Quote", `Invoice # ${invoice.invoiceNumber}`);
-
-      addSection("Customer");
-      addKeyValue("Customer Name", invoice.customerName || "Not specified");
-      addKeyValue("Job Name", invoice.jobName || "Not specified");
-
-      addLineItemTable();
-
-      addSection("Totals");
-      addMoneyRow("Subtotal", currency(subtotal));
-      addMoneyRow(`Tax (${invoice.taxPercent}%)`, currency(tax));
-      addMoneyRow("Total Due", currency(total), true);
-
-      addSection("Notes");
-      addTextBlock(invoice.notes || "No additional notes entered.");
-
-      doc.save("TradesmanAI_Invoice.pdf");
-      return;
-    }
-
-    if (tool === "contract") {
-      addHeader(contract.contractTitle || "Contract", contract.projectName || "");
-
-      addSection("Parties");
-      addKeyValue("Contractor", settings.companyName);
-      addKeyValue("Client", contract.clientName || "Not specified");
-      addKeyValue("Project", contract.projectName || "Not specified");
-      addKeyValue("Start Date", contract.startDate || "Not specified");
-      addKeyValue("Contract Price", contract.contractPrice || "To be determined");
-
-      addSection("Scope of Work");
-      addTextBlock(contract.scopeOfWork || "No scope entered.");
-
-      addSection("Completion Terms");
-      addTextBlock(contract.completionTerms);
-
-      addSection("Payment Terms");
-      addTextBlock(contract.paymentTerms);
-
-      addSection("Exclusions");
-      addTextBlock(contract.exclusions);
-
-      addSection("Warranty / Limitation");
-      addTextBlock(contract.warranty);
-
-      addSection("Signatures");
-      addTextBlock(contract.signatures);
-
-      doc.save("TradesmanAI_Contract.pdf");
-      return;
-    }
-
-    if (tool === "troubleshoot") {
-      addHeader("Troubleshooting Report", trouble.machine || "");
-
-      addSection("Machine Information");
-      addKeyValue("Machine / Vehicle", trouble.machine || "Machine not specified");
-      addKeyValue("Severity", trouble.severity || "Not specified");
-
-      addSection("Reported Symptom");
-      addTextBlock(trouble.symptom || "No symptom entered.");
-
-      addSection("Recent Repairs / Events");
-      addTextBlock(trouble.recentWork || "No recent work entered.");
-
-      addSection("Initial Diagnostic Direction");
-      addTextBlock(
-        plan !== "pro"
-          ? "Troubleshooting Assistant is part of the Pro plan. Upgrade to Pro to unlock AI-assisted troubleshooting."
-          : `Likely Cause Areas
-1. Electrical power / fuse / relay / switch issue
-2. Hydraulic restriction, low pressure, or control issue
-3. Sensor, safety interlock, or input issue
-4. Mechanical wear, binding, or failed component
-
-Recommended Checks
-1. Verify battery voltage, grounds, and visible wiring
-2. Check all relevant fuses, relays, and safety switches
-3. Inspect fluid levels, filters, leaks, and hydraulic hoses
-4. Listen for solenoid engagement or pump load changes
-5. Test suspect circuits with a multimeter`
-      );
-
-      doc.save("TradesmanAI_Troubleshooting.pdf");
+    if (tool === "saved") {
+      addHeader("Saved Document");
+      addTextBlock(output);
+      doc.save("TradesmanAI_SavedDocument.pdf");
       return;
     }
 
@@ -690,7 +490,7 @@ Recommended Checks
     };
 
     setSavedDocs((prev) => [doc, ...prev]);
-    setOutput(`${type.toUpperCase()} SAVED
+    setOutput(`DOCUMENT SAVED
 
 Title:
 ${doc.title}
@@ -699,9 +499,7 @@ Customer:
 ${doc.customerName || "Not specified"}
 
 Saved:
-${doc.createdAt}
-
-The document has been saved locally in this browser.`);
+${doc.createdAt}`);
   }
 
   function loadSavedDoc(doc: SavedDoc) {
@@ -723,35 +521,8 @@ The document has been saved locally in this browser.`);
       setCustomers((prev) =>
         prev.map((c) => (c.id === customerForm.id ? customerForm : c))
       );
-      setOutput(`CUSTOMER UPDATED
-
-Name:
-${customerForm.name}
-
-Company:
-${customerForm.company || "-"}
-
-Phone:
-${customerForm.phone || "-"}
-
-Email:
-${customerForm.email || "-"}`);
     } else {
-      const newCustomer = { ...customerForm, id: uid() };
-      setCustomers((prev) => [newCustomer, ...prev]);
-      setOutput(`CUSTOMER SAVED
-
-Name:
-${newCustomer.name}
-
-Company:
-${newCustomer.company || "-"}
-
-Phone:
-${newCustomer.phone || "-"}
-
-Email:
-${newCustomer.email || "-"}`);
+      setCustomers((prev) => [{ ...customerForm, id: uid() }, ...prev]);
     }
 
     setCustomerForm({
@@ -763,6 +534,8 @@ ${newCustomer.email || "-"}`);
       address: "",
       notes: "",
     });
+
+    setOutput("Customer saved.");
   }
 
   function editCustomer(c: Customer) {
@@ -779,6 +552,7 @@ ${newCustomer.email || "-"}`);
     setScope((prev) => ({ ...prev, customerName: name }));
     setInvoice((prev) => ({ ...prev, customerName: name }));
     setContract((prev) => ({ ...prev, clientName: name }));
+    setAiBuilder((prev) => ({ ...prev, customerName: name }));
   }
 
   function applySettingsToForms() {
@@ -797,11 +571,7 @@ ${newCustomer.email || "-"}`);
       taxPercent: settings.taxPercent,
       items: [
         { description: "Labor", quantity: 8, unitPrice: settings.laborRate },
-        {
-          description: "Equipment",
-          quantity: 6,
-          unitPrice: settings.equipmentRate,
-        },
+        { description: "Equipment", quantity: 6, unitPrice: settings.equipmentRate },
         {
           description: "Material Delivery",
           quantity: 20,
@@ -810,20 +580,172 @@ ${newCustomer.email || "-"}`);
       ],
     }));
 
-    setOutput(`COMPANY SETTINGS SAVED
+    setOutput("Company settings saved.");
+  }
 
-Company:
-${settings.companyName}
+  function smartExtract(prompt: string, fallback: number) {
+    const matches = prompt.match(/\d+(\.\d+)?/g);
+    if (!matches || matches.length === 0) return fallback;
+    return Number(matches[0]) || fallback;
+  }
 
-Location:
-${settings.location}
+  function aiBuildEstimate() {
+    if (plan !== "pro") {
+      setOutput("AI Builder is a Pro feature. Upgrade to Pro to unlock it.");
+      return;
+    }
 
-Defaults Updated:
-- Labor Rate: ${currency(settings.laborRate)}
-- Equipment Rate: ${currency(settings.equipmentRate)}
-- Material Price / Ton: ${currency(settings.materialPricePerTon)}
-- Markup: ${settings.markupPercent}%
-- Tax: ${settings.taxPercent}%`);
+    const text = aiBuilder.prompt.toLowerCase();
+    const length = text.includes("x")
+      ? Number(text.split("x")[0].match(/\d+/)?.[0] || estimate.length)
+      : smartExtract(text, estimate.length);
+
+    const width = text.includes("x")
+      ? Number(text.split("x")[1]?.match(/\d+/)?.[0] || estimate.width)
+      : estimate.width;
+
+    const depth =
+      text.includes("inch") || text.includes("inches")
+        ? Number(text.match(/(\d+)\s*(inch|inches)/)?.[1] || estimate.depthInches)
+        : estimate.depthInches;
+
+    const material = text.includes("concrete")
+      ? "Concrete"
+      : text.includes("asphalt")
+      ? "Asphalt Millings"
+      : text.includes("gravel")
+      ? "Gravel"
+      : text.includes("road base")
+      ? "Road Base"
+      : estimate.material;
+
+    const laborHours =
+      text.includes("demo") || text.includes("remove")
+        ? 12
+        : text.includes("pad")
+        ? 8
+        : text.includes("driveway")
+        ? 10
+        : 8;
+
+    const equipmentHours =
+      text.includes("demo") || text.includes("remove")
+        ? 10
+        : text.includes("driveway")
+        ? 8
+        : 6;
+
+    const newEstimate = {
+      ...estimate,
+      customerName: aiBuilder.customerName,
+      jobType: aiBuilder.projectType,
+      length,
+      width,
+      depthInches: depth,
+      material,
+      laborHours,
+      equipmentHours,
+      notes: `AI-generated from prompt: ${aiBuilder.prompt}`,
+    };
+
+    setEstimate(newEstimate);
+    setTool("estimate");
+
+    const cubicFeet = newEstimate.length * newEstimate.width * (newEstimate.depthInches / 12);
+    const cubicYards = cubicFeet / 27;
+    const tons = cubicYards * 1.4;
+    const laborCost = newEstimate.laborHours * newEstimate.laborRate;
+    const equipmentCost = newEstimate.equipmentHours * newEstimate.equipmentRate;
+    const materialCost = tons * newEstimate.materialPricePerTon;
+    const directCost =
+      laborCost +
+      equipmentCost +
+      materialCost +
+      newEstimate.mobilization +
+      newEstimate.dumpFees;
+    const markupAmount = directCost * (newEstimate.markupPercent / 100);
+    const total = directCost + markupAmount;
+
+    setOutput(`AI ESTIMATE BUILDER
+
+Customer:
+${newEstimate.customerName || "Not specified"}
+
+Prompt:
+${aiBuilder.prompt}
+
+AI Interpreted Job:
+${newEstimate.jobType}
+
+Dimensions:
+${newEstimate.length} ft x ${newEstimate.width} ft x ${newEstimate.depthInches} in
+
+Material:
+${newEstimate.material}
+
+Estimated Volume:
+${cubicYards.toFixed(2)} cubic yards
+
+Estimated Tonnage:
+${tons.toFixed(2)} tons
+
+Estimated Labor:
+${newEstimate.laborHours} hours
+
+Estimated Equipment:
+${newEstimate.equipmentHours} hours
+
+Estimated Total:
+${currency(total)}
+
+This estimate draft has also been pushed into the Estimate Generator form for refinement.`);
+  }
+
+  function aiBuildScope() {
+    if (plan !== "pro") {
+      setOutput("AI Builder is a Pro feature. Upgrade to Pro to unlock it.");
+      return;
+    }
+
+    const projectName = aiBuilder.projectType || "Project";
+    const description = `Provide labor, equipment, site preparation, grading, and material placement for ${projectName.toLowerCase()} as described by customer request. Work to include layout, material handling, grading, and finish work as required for normal completion of the described task.`;
+    const materials = aiBuilder.prompt.toLowerCase().includes("concrete")
+      ? "Concrete materials, subgrade prep, and associated labor/equipment as required."
+      : aiBuilder.prompt.toLowerCase().includes("gravel") ||
+        aiBuilder.prompt.toLowerCase().includes("road base")
+      ? "Road base / gravel material, delivery, placement, grading, and compaction."
+      : "Standard materials and equipment necessary to complete the described work.";
+
+    const newScope = {
+      ...scope,
+      customerName: aiBuilder.customerName,
+      projectName,
+      jobDescription: description,
+      materials,
+      customerNotes: aiBuilder.prompt,
+    };
+
+    setScope(newScope);
+    setTool("scope");
+
+    setOutput(`AI SCOPE BUILDER
+
+Customer:
+${newScope.customerName || "Not specified"}
+
+Project:
+${newScope.projectName}
+
+Original Prompt:
+${aiBuilder.prompt}
+
+Generated Work Description:
+${newScope.jobDescription}
+
+Generated Materials Section:
+${newScope.materials}
+
+This scope draft has also been pushed into the Scope Writer form for refinement.`);
   }
 
   function generateEstimate() {
@@ -831,9 +753,6 @@ Defaults Updated:
 
 Company:
 ${settings.companyName}
-
-Location:
-${settings.location}
 
 Customer:
 ${estimate.customerName || "Not specified"}
@@ -856,23 +775,8 @@ ${num(estimateMath.cubicYards)} cubic yards
 Estimated Tonnage:
 ${num(estimateMath.tons)} tons
 
-COST BREAKDOWN
-Labor (${estimate.laborHours} hrs @ ${currency(estimate.laborRate)}/hr): ${currency(
-      estimateMath.laborCost
-    )}
-Equipment (${estimate.equipmentHours} hrs @ ${currency(
-      estimate.equipmentRate
-    )}/hr): ${currency(estimateMath.equipmentCost)}
-Material (${num(estimateMath.tons)} tons @ ${currency(
-      estimate.materialPricePerTon
-    )}/ton): ${currency(estimateMath.materialCost)}
-Mobilization: ${currency(estimate.mobilization)}
-Dump Fees: ${currency(estimate.dumpFees)}
-
-Direct Cost: ${currency(estimateMath.directCost)}
-Markup (${estimate.markupPercent}%): ${currency(estimateMath.markupAmount)}
-
-TOTAL ESTIMATE: ${currency(estimateMath.total)}
+TOTAL ESTIMATE:
+${currency(estimateMath.total)}
 
 Notes:
 ${estimate.notes || "No additional notes entered."}`);
@@ -893,11 +797,11 @@ ${scope.projectName || "Not specified"}
 Work Description:
 ${scope.jobDescription || "No description entered."}
 
-Materials / Inclusions:
-${scope.materials || "To be determined based on final conditions and approval."}
+Materials:
+${scope.materials || "Not specified"}
 
-Customer Notes / Site Conditions:
-${scope.customerNotes || "No customer notes entered."}
+Customer Notes:
+${scope.customerNotes || "No notes entered."}
 
 Timeline:
 ${scope.timeline}
@@ -925,41 +829,23 @@ ${scope.exclusions}`);
 
     setOutput(`INVOICE / QUOTE
 
-Company:
-${settings.companyName}
-
-Location:
-${settings.location}
-
-Invoice #:
-${invoice.invoiceNumber}
-
 Customer:
 ${invoice.customerName || "Not specified"}
 
 Job:
 ${invoice.jobName || "Not specified"}
 
-LINE ITEMS
 ${lineItems}
 
-Subtotal: ${currency(subtotal)}
-Tax (${invoice.taxPercent}%): ${currency(tax)}
-
-TOTAL DUE: ${currency(total)}
+TOTAL DUE:
+${currency(total)}
 
 Notes:
-${invoice.notes || "No additional notes entered."}`);
+${invoice.notes || "No notes entered."}`);
   }
 
   function generateContract() {
     setOutput(`${contract.contractTitle.toUpperCase()}
-
-Contractor:
-${settings.companyName}
-
-Location:
-${settings.location}
 
 Client:
 ${contract.clientName || "Not specified"}
@@ -967,17 +853,11 @@ ${contract.clientName || "Not specified"}
 Project:
 ${contract.projectName || "Not specified"}
 
-Start Date:
-${contract.startDate || "Not specified"}
-
 Contract Price:
 ${contract.contractPrice || "To be determined"}
 
 SCOPE OF WORK
 ${contract.scopeOfWork || "No scope entered."}
-
-COMPLETION TERMS
-${contract.completionTerms}
 
 PAYMENT TERMS
 ${contract.paymentTerms}
@@ -985,33 +865,25 @@ ${contract.paymentTerms}
 EXCLUSIONS
 ${contract.exclusions}
 
-WARRANTY / LIMITATION
-${contract.warranty}
-
 SIGNATURES
 ${contract.signatures}`);
   }
 
   function generateTroubleshoot() {
     if (plan !== "pro") {
-      setOutput(
-        "Troubleshooting Assistant is part of the Pro plan. Upgrade to Pro to unlock AI-assisted troubleshooting."
-      );
+      setOutput("Troubleshooting Assistant is a Pro feature.");
       return;
     }
 
     setOutput(`AI TROUBLESHOOTING ASSISTANT
 
-Company:
-${settings.companyName}
-
 Machine / Vehicle:
 ${trouble.machine || "Machine not specified"}
 
-Reported Symptom:
+Symptom:
 ${trouble.symptom || "No symptom entered"}
 
-Recent Repairs / Events:
+Recent Work:
 ${trouble.recentWork || "No recent work entered"}
 
 Severity:
@@ -1019,18 +891,9 @@ ${trouble.severity}
 
 LIKELY CAUSE AREAS
 1. Electrical power / fuse / relay / switch issue
-2. Hydraulic restriction, low pressure, or control issue
-3. Sensor, safety interlock, or input issue
-4. Mechanical wear, binding, or failed component
-
-STEP-BY-STEP CHECKS
-1. Verify battery voltage, grounds, and visible wiring
-2. Check all relevant fuses, relays, and safety switches
-3. Inspect fluid levels, filters, leaks, and hydraulic hoses
-4. Listen for solenoid engagement or pump load changes
-5. Test suspect circuits with a multimeter
-6. Verify pressure or flow if hydraulic performance is affected
-7. Compare working and non-working functions if applicable`);
+2. Hydraulic restriction or control issue
+3. Sensor or safety interlock issue
+4. Mechanical wear or failed component`);
   }
 
   function generateFromActiveTool() {
@@ -1090,7 +953,7 @@ STEP-BY-STEP CHECKS
           <div>
             <div style={{ fontSize: 32, fontWeight: 900 }}>Tradesman AI</div>
             <div style={{ color: colors.muted, marginTop: 6 }}>
-              Contractor tools for estimates, scopes, invoices, contracts, saved jobs, saved customers, and Pro troubleshooting.
+              AI builder, saved customers, saved jobs, pro troubleshooting, and contractor documents.
             </div>
           </div>
 
@@ -1113,7 +976,7 @@ STEP-BY-STEP CHECKS
         >
           <div style={{ fontSize: 24, fontWeight: 900, marginBottom: 8 }}>Choose Your Plan</div>
           <div style={{ color: colors.muted, marginBottom: 16 }}>
-            Basic gives you the core business tools. Pro adds AI-assisted troubleshooting.
+            Basic gives you the core business tools. Pro adds AI Builder and troubleshooting.
           </div>
 
           <div
@@ -1135,13 +998,13 @@ STEP-BY-STEP CHECKS
               <div style={{ fontSize: 30, fontWeight: 900, marginBottom: 8 }}>$9/mo</div>
               <div style={{ color: colors.muted, marginBottom: 12 }}>5-day free trial</div>
               <div style={{ lineHeight: 1.7, marginBottom: 16 }}>
-                • Estimate Generator
+                • Estimates
                 <br />
-                • Scope Writer
+                • Scopes
                 <br />
-                • Invoice / Quote Builder
+                • Invoices
                 <br />
-                • Contract Builder
+                • Contracts
                 <br />
                 • Saved Customers
                 <br />
@@ -1174,9 +1037,9 @@ STEP-BY-STEP CHECKS
               <div style={{ lineHeight: 1.7, marginBottom: 16 }}>
                 • Everything in Basic
                 <br />
-                • AI Troubleshooting Assistant
+                • AI Quick Builder
                 <br />
-                • Advanced AI-assisted outputs
+                • AI Troubleshooting
                 <br />
                 • Professional PDF exports
               </div>
@@ -1208,43 +1071,16 @@ STEP-BY-STEP CHECKS
             >
               <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 12 }}>Tools</div>
 
-              <button style={toolBtnStyle(tool === "dashboard")} onClick={() => setTool("dashboard")}>
-                Dashboard
-              </button>
-              <button style={toolBtnStyle(tool === "settings")} onClick={() => setTool("settings")}>
-                Company Settings
-              </button>
-              <button style={toolBtnStyle(tool === "customers")} onClick={() => setTool("customers")}>
-                Customers
-              </button>
-              <button style={toolBtnStyle(tool === "saved")} onClick={() => setTool("saved")}>
-                Saved Jobs / Docs
-              </button>
-              <button style={toolBtnStyle(tool === "estimate")} onClick={() => setTool("estimate")}>
-                Estimate Generator
-              </button>
-              <button style={toolBtnStyle(tool === "scope")} onClick={() => setTool("scope")}>
-                Scope of Work Writer
-              </button>
-              <button style={toolBtnStyle(tool === "invoice")} onClick={() => setTool("invoice")}>
-                Invoice / Quote Builder
-              </button>
-              <button style={toolBtnStyle(tool === "contract")} onClick={() => setTool("contract")}>
-                Contract Builder
-              </button>
-              <button
-                style={toolBtnStyle(tool === "troubleshoot", plan !== "pro")}
-                onClick={() => {
-                  setTool("troubleshoot");
-                  if (plan !== "pro") {
-                    setOutput(
-                      "Troubleshooting Assistant is a Pro feature. Use the Pro plan card above to upgrade."
-                    );
-                  }
-                }}
-              >
-                Troubleshooting Assistant (Pro)
-              </button>
+              <button style={toolBtnStyle(tool === "dashboard")} onClick={() => setTool("dashboard")}>Dashboard</button>
+              <button style={toolBtnStyle(tool === "settings")} onClick={() => setTool("settings")}>Company Settings</button>
+              <button style={toolBtnStyle(tool === "customers")} onClick={() => setTool("customers")}>Customers</button>
+              <button style={toolBtnStyle(tool === "saved")} onClick={() => setTool("saved")}>Saved Jobs / Docs</button>
+              <button style={toolBtnStyle(tool === "aiBuilder", plan !== "pro")} onClick={() => setTool("aiBuilder")}>AI Quick Builder (Pro)</button>
+              <button style={toolBtnStyle(tool === "estimate")} onClick={() => setTool("estimate")}>Estimate Generator</button>
+              <button style={toolBtnStyle(tool === "scope")} onClick={() => setTool("scope")}>Scope Writer</button>
+              <button style={toolBtnStyle(tool === "invoice")} onClick={() => setTool("invoice")}>Invoice Builder</button>
+              <button style={toolBtnStyle(tool === "contract")} onClick={() => setTool("contract")}>Contract Builder</button>
+              <button style={toolBtnStyle(tool === "troubleshoot", plan !== "pro")} onClick={() => setTool("troubleshoot")}>Troubleshooting (Pro)</button>
             </div>
           </div>
 
@@ -1276,9 +1112,6 @@ STEP-BY-STEP CHECKS
                   <Field label="Material Price / Ton" type="number" value={String(settings.materialPricePerTon)} onChange={(v) => setSettings({ ...settings, materialPricePerTon: Number(v) || 0 })} colors={colors} />
                   <Field label="Markup %" type="number" value={String(settings.markupPercent)} onChange={(v) => setSettings({ ...settings, markupPercent: Number(v) || 0 })} colors={colors} />
                   <Field label="Tax %" type="number" value={String(settings.taxPercent)} onChange={(v) => setSettings({ ...settings, taxPercent: Number(v) || 0 })} colors={colors} />
-                  <Field label="Mobilization Default" type="number" value={String(settings.mobilizationDefault)} onChange={(v) => setSettings({ ...settings, mobilizationDefault: Number(v) || 0 })} colors={colors} />
-                  <Field label="Dump Fees Default" type="number" value={String(settings.dumpFeesDefault)} onChange={(v) => setSettings({ ...settings, dumpFeesDefault: Number(v) || 0 })} colors={colors} />
-                  <Field label="Currency" value={settings.currency} onChange={(v) => setSettings({ ...settings, currency: v.toUpperCase() })} colors={colors} />
                 </Grid>
               </Card>
             )}
@@ -1293,7 +1126,6 @@ STEP-BY-STEP CHECKS
                   <Field label="Address" value={customerForm.address} onChange={(v) => setCustomerForm({ ...customerForm, address: v })} colors={colors} />
                 </Grid>
                 <Area label="Notes" value={customerForm.notes} onChange={(v) => setCustomerForm({ ...customerForm, notes: v })} colors={colors} />
-
                 <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
                   <button onClick={saveCustomer} style={primaryBtn(colors)}>
                     {customerForm.id ? "Update Customer" : "Save Customer"}
@@ -1301,37 +1133,19 @@ STEP-BY-STEP CHECKS
                 </div>
 
                 <div style={{ display: "grid", gap: 12 }}>
-                  {customers.length === 0 ? (
-                    <div style={{ color: colors.muted }}>No saved customers yet.</div>
-                  ) : (
-                    customers.map((c) => (
-                      <div
-                        key={c.id}
-                        style={{
-                          background: colors.outputBg,
-                          border: `1px solid ${colors.border}`,
-                          borderRadius: 12,
-                          padding: 14,
-                        }}
-                      >
-                        <div style={{ fontWeight: 800 }}>{c.name}</div>
-                        <div style={{ color: colors.muted, marginTop: 4 }}>
-                          {c.company || "-"} | {c.phone || "-"} | {c.email || "-"}
-                        </div>
-                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
-                          <button onClick={() => useCustomer(c.name)} style={secondaryBtn(colors)}>
-                            Use in Forms
-                          </button>
-                          <button onClick={() => editCustomer(c)} style={secondaryBtn(colors)}>
-                            Edit
-                          </button>
-                          <button onClick={() => deleteCustomer(c.id)} style={dangerBtn(colors)}>
-                            Delete
-                          </button>
-                        </div>
+                  {customers.map((c) => (
+                    <div key={c.id} style={{ background: colors.outputBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 14 }}>
+                      <div style={{ fontWeight: 800 }}>{c.name}</div>
+                      <div style={{ color: colors.muted, marginTop: 4 }}>
+                        {c.company || "-"} | {c.phone || "-"} | {c.email || "-"}
                       </div>
-                    ))
-                  )}
+                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
+                        <button onClick={() => useCustomer(c.name)} style={secondaryBtn(colors)}>Use in Forms</button>
+                        <button onClick={() => editCustomer(c)} style={secondaryBtn(colors)}>Edit</button>
+                        <button onClick={() => deleteCustomer(c.id)} style={dangerBtn(colors)}>Delete</button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </Card>
             )}
@@ -1343,30 +1157,41 @@ STEP-BY-STEP CHECKS
                     <div style={{ color: colors.muted }}>No saved documents yet.</div>
                   ) : (
                     savedDocs.map((d) => (
-                      <div
-                        key={d.id}
-                        style={{
-                          background: colors.outputBg,
-                          border: `1px solid ${colors.border}`,
-                          borderRadius: 12,
-                          padding: 14,
-                        }}
-                      >
+                      <div key={d.id} style={{ background: colors.outputBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 14 }}>
                         <div style={{ fontWeight: 800 }}>{d.title}</div>
                         <div style={{ color: colors.muted, marginTop: 4 }}>
                           {d.type} | {d.customerName || "No customer"} | {d.createdAt}
                         </div>
                         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
-                          <button onClick={() => loadSavedDoc(d)} style={secondaryBtn(colors)}>
-                            Open
-                          </button>
-                          <button onClick={() => deleteSavedDoc(d.id)} style={dangerBtn(colors)}>
-                            Delete
-                          </button>
+                          <button onClick={() => loadSavedDoc(d)} style={secondaryBtn(colors)}>Open</button>
+                          <button onClick={() => deleteSavedDoc(d.id)} style={dangerBtn(colors)}>Delete</button>
                         </div>
                       </div>
                     ))
                   )}
+                </div>
+              </Card>
+            )}
+
+            {tool === "aiBuilder" && (
+              <Card title="AI Quick Builder (Pro)" colors={colors}>
+                <Grid>
+                  <Field label="Customer Name" value={aiBuilder.customerName} onChange={(v) => setAiBuilder({ ...aiBuilder, customerName: v })} colors={colors} />
+                  <Field label="Project Type" value={aiBuilder.projectType} onChange={(v) => setAiBuilder({ ...aiBuilder, projectType: v })} colors={colors} />
+                </Grid>
+                <Area
+                  label='Describe the job in plain English'
+                  value={aiBuilder.prompt}
+                  onChange={(v) => setAiBuilder({ ...aiBuilder, prompt: v })}
+                  colors={colors}
+                />
+                <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                  <button onClick={aiBuildEstimate} style={primaryBtn(colors)}>
+                    AI Build Estimate
+                  </button>
+                  <button onClick={aiBuildScope} style={secondaryBtn(colors)}>
+                    AI Build Scope
+                  </button>
                 </div>
               </Card>
             )}
@@ -1381,128 +1206,29 @@ STEP-BY-STEP CHECKS
                   <Field label="Length (ft)" type="number" value={String(estimate.length)} onChange={(v) => setEstimate({ ...estimate, length: Number(v) || 0 })} colors={colors} />
                   <Field label="Width (ft)" type="number" value={String(estimate.width)} onChange={(v) => setEstimate({ ...estimate, width: Number(v) || 0 })} colors={colors} />
                   <Field label="Depth (in)" type="number" value={String(estimate.depthInches)} onChange={(v) => setEstimate({ ...estimate, depthInches: Number(v) || 0 })} colors={colors} />
-                  <Field label="Material Price / Ton" type="number" value={String(estimate.materialPricePerTon)} onChange={(v) => setEstimate({ ...estimate, materialPricePerTon: Number(v) || 0 })} colors={colors} />
-                  <Field label="Labor Hours" type="number" value={String(estimate.laborHours)} onChange={(v) => setEstimate({ ...estimate, laborHours: Number(v) || 0 })} colors={colors} />
-                  <Field label="Labor Rate / Hr" type="number" value={String(estimate.laborRate)} onChange={(v) => setEstimate({ ...estimate, laborRate: Number(v) || 0 })} colors={colors} />
-                  <Field label="Equipment Hours" type="number" value={String(estimate.equipmentHours)} onChange={(v) => setEstimate({ ...estimate, equipmentHours: Number(v) || 0 })} colors={colors} />
-                  <Field label="Equipment Rate / Hr" type="number" value={String(estimate.equipmentRate)} onChange={(v) => setEstimate({ ...estimate, equipmentRate: Number(v) || 0 })} colors={colors} />
-                  <Field label="Mobilization" type="number" value={String(estimate.mobilization)} onChange={(v) => setEstimate({ ...estimate, mobilization: Number(v) || 0 })} colors={colors} />
-                  <Field label="Dump Fees" type="number" value={String(estimate.dumpFees)} onChange={(v) => setEstimate({ ...estimate, dumpFees: Number(v) || 0 })} colors={colors} />
-                  <Field label="Markup %" type="number" value={String(estimate.markupPercent)} onChange={(v) => setEstimate({ ...estimate, markupPercent: Number(v) || 0 })} colors={colors} />
                 </Grid>
-
                 <Area label="Notes" value={estimate.notes} onChange={(v) => setEstimate({ ...estimate, notes: v })} colors={colors} />
-
-                <div style={{ marginTop: 16, background: colors.outputBg, border: `1px solid ${colors.border}`, borderRadius: 12, padding: 14, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
-                  <Metric label="Cubic Yards" value={num(estimateMath.cubicYards)} colors={colors} />
-                  <Metric label="Estimated Tons" value={num(estimateMath.tons)} colors={colors} />
-                  <Metric label="Direct Cost" value={currency(estimateMath.directCost)} colors={colors} />
-                  <Metric label="Estimated Total" value={currency(estimateMath.total)} colors={colors} />
-                </div>
               </Card>
             )}
 
             {tool === "scope" && (
-              <Card title="Scope of Work Writer" colors={colors}>
+              <Card title="Scope Writer" colors={colors}>
                 <Grid>
                   <Field label="Customer Name" value={scope.customerName} onChange={(v) => setScope({ ...scope, customerName: v })} colors={colors} />
                   <Field label="Project Name" value={scope.projectName} onChange={(v) => setScope({ ...scope, projectName: v })} colors={colors} />
                 </Grid>
                 <Area label="Job Description" value={scope.jobDescription} onChange={(v) => setScope({ ...scope, jobDescription: v })} colors={colors} />
-                <Area label="Materials / Inclusions" value={scope.materials} onChange={(v) => setScope({ ...scope, materials: v })} colors={colors} />
-                <Area label="Customer Notes / Site Conditions" value={scope.customerNotes} onChange={(v) => setScope({ ...scope, customerNotes: v })} colors={colors} />
-                <Area label="Timeline" value={scope.timeline} onChange={(v) => setScope({ ...scope, timeline: v })} colors={colors} />
-                <Area label="Exclusions" value={scope.exclusions} onChange={(v) => setScope({ ...scope, exclusions: v })} colors={colors} />
+                <Area label="Materials" value={scope.materials} onChange={(v) => setScope({ ...scope, materials: v })} colors={colors} />
               </Card>
             )}
 
             {tool === "invoice" && (
-              <Card title="Invoice / Quote Builder" colors={colors}>
+              <Card title="Invoice Builder" colors={colors}>
                 <Grid>
                   <Field label="Customer Name" value={invoice.customerName} onChange={(v) => setInvoice({ ...invoice, customerName: v })} colors={colors} />
                   <Field label="Job Name" value={invoice.jobName} onChange={(v) => setInvoice({ ...invoice, jobName: v })} colors={colors} />
                   <Field label="Invoice Number" value={invoice.invoiceNumber} onChange={(v) => setInvoice({ ...invoice, invoiceNumber: v })} colors={colors} />
-                  <Field label="Tax %" type="number" value={String(invoice.taxPercent)} onChange={(v) => setInvoice({ ...invoice, taxPercent: Number(v) || 0 })} colors={colors} />
                 </Grid>
-
-                <div style={{ marginTop: 14 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: colors.muted, marginBottom: 8 }}>
-                    Line Items
-                  </div>
-
-                  {invoice.items.map((item, index) => (
-                    <div
-                      key={index}
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "2fr 1fr 1fr auto",
-                        gap: 10,
-                        marginBottom: 10,
-                      }}
-                    >
-                      <input
-                        value={item.description}
-                        onChange={(e) => {
-                          const items = [...invoice.items];
-                          items[index].description = e.target.value;
-                          setInvoice({ ...invoice, items });
-                        }}
-                        placeholder="Description"
-                        style={inputStyle(colors)}
-                      />
-                      <input
-                        type="number"
-                        value={item.quantity}
-                        onChange={(e) => {
-                          const items = [...invoice.items];
-                          items[index].quantity = Number(e.target.value) || 0;
-                          setInvoice({ ...invoice, items });
-                        }}
-                        placeholder="Qty"
-                        style={inputStyle(colors)}
-                      />
-                      <input
-                        type="number"
-                        value={item.unitPrice}
-                        onChange={(e) => {
-                          const items = [...invoice.items];
-                          items[index].unitPrice = Number(e.target.value) || 0;
-                          setInvoice({ ...invoice, items });
-                        }}
-                        placeholder="Unit Price"
-                        style={inputStyle(colors)}
-                      />
-                      <button
-                        onClick={() => {
-                          const items = invoice.items.filter((_, i) => i !== index);
-                          setInvoice({
-                            ...invoice,
-                            items: items.length
-                              ? items
-                              : [{ description: "", quantity: 1, unitPrice: 0 }],
-                          });
-                        }}
-                        style={dangerBtn(colors)}
-                      >
-                        X
-                      </button>
-                    </div>
-                  ))}
-
-                  <button
-                    onClick={() =>
-                      setInvoice({
-                        ...invoice,
-                        items: [...invoice.items, { description: "", quantity: 1, unitPrice: 0 }],
-                      })
-                    }
-                    style={secondaryBtn(colors)}
-                  >
-                    Add Line Item
-                  </button>
-                </div>
-
-                <Area label="Notes" value={invoice.notes} onChange={(v) => setInvoice({ ...invoice, notes: v })} colors={colors} />
               </Card>
             )}
 
@@ -1512,15 +1238,8 @@ STEP-BY-STEP CHECKS
                   <Field label="Contract Title" value={contract.contractTitle} onChange={(v) => setContract({ ...contract, contractTitle: v })} colors={colors} />
                   <Field label="Client Name" value={contract.clientName} onChange={(v) => setContract({ ...contract, clientName: v })} colors={colors} />
                   <Field label="Project Name" value={contract.projectName} onChange={(v) => setContract({ ...contract, projectName: v })} colors={colors} />
-                  <Field label="Contract Price" value={contract.contractPrice} onChange={(v) => setContract({ ...contract, contractPrice: v })} colors={colors} />
-                  <Field label="Start Date" value={contract.startDate} onChange={(v) => setContract({ ...contract, startDate: v })} colors={colors} />
                 </Grid>
                 <Area label="Scope of Work" value={contract.scopeOfWork} onChange={(v) => setContract({ ...contract, scopeOfWork: v })} colors={colors} />
-                <Area label="Completion Terms" value={contract.completionTerms} onChange={(v) => setContract({ ...contract, completionTerms: v })} colors={colors} />
-                <Area label="Payment Terms" value={contract.paymentTerms} onChange={(v) => setContract({ ...contract, paymentTerms: v })} colors={colors} />
-                <Area label="Exclusions" value={contract.exclusions} onChange={(v) => setContract({ ...contract, exclusions: v })} colors={colors} />
-                <Area label="Warranty / Limitation" value={contract.warranty} onChange={(v) => setContract({ ...contract, warranty: v })} colors={colors} />
-                <Area label="Signatures" value={contract.signatures} onChange={(v) => setContract({ ...contract, signatures: v })} colors={colors} />
               </Card>
             )}
 
@@ -1529,15 +1248,16 @@ STEP-BY-STEP CHECKS
                 <Field label="Machine / Vehicle" value={trouble.machine} onChange={(v) => setTrouble({ ...trouble, machine: v })} colors={colors} />
                 <Area label="Main Symptom" value={trouble.symptom} onChange={(v) => setTrouble({ ...trouble, symptom: v })} colors={colors} />
                 <Area label="Recent Work / Relevant History" value={trouble.recentWork} onChange={(v) => setTrouble({ ...trouble, recentWork: v })} colors={colors} />
-                <Field label="Severity" value={trouble.severity} onChange={(v) => setTrouble({ ...trouble, severity: v })} colors={colors} />
               </Card>
             )}
 
             {tool !== "dashboard" && tool !== "customers" && tool !== "saved" && (
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
-                <button onClick={generateFromActiveTool} style={primaryBtn(colors)}>
-                  {tool === "settings" ? "Save Settings" : "Generate Output"}
-                </button>
+                {tool !== "aiBuilder" && (
+                  <button onClick={generateFromActiveTool} style={primaryBtn(colors)}>
+                    {tool === "settings" ? "Save Settings" : "Generate Output"}
+                  </button>
+                )}
                 <button onClick={copyOutput} style={secondaryBtn(colors)}>
                   Copy
                 </button>
@@ -1545,34 +1265,22 @@ STEP-BY-STEP CHECKS
                   Export PDF
                 </button>
                 {tool === "estimate" && (
-                  <button
-                    onClick={() => saveCurrentOutput("estimate", `${estimate.jobType} Estimate`, estimate.customerName)}
-                    style={secondaryBtn(colors)}
-                  >
+                  <button onClick={() => saveCurrentOutput("estimate", `${estimate.jobType} Estimate`, estimate.customerName)} style={secondaryBtn(colors)}>
                     Save Estimate
                   </button>
                 )}
                 {tool === "scope" && (
-                  <button
-                    onClick={() => saveCurrentOutput("scope", scope.projectName || "Scope of Work", scope.customerName)}
-                    style={secondaryBtn(colors)}
-                  >
+                  <button onClick={() => saveCurrentOutput("scope", scope.projectName || "Scope of Work", scope.customerName)} style={secondaryBtn(colors)}>
                     Save Scope
                   </button>
                 )}
                 {tool === "invoice" && (
-                  <button
-                    onClick={() => saveCurrentOutput("invoice", `Invoice ${invoice.invoiceNumber}`, invoice.customerName)}
-                    style={secondaryBtn(colors)}
-                  >
+                  <button onClick={() => saveCurrentOutput("invoice", `Invoice ${invoice.invoiceNumber}`, invoice.customerName)} style={secondaryBtn(colors)}>
                     Save Invoice
                   </button>
                 )}
                 {tool === "contract" && (
-                  <button
-                    onClick={() => saveCurrentOutput("contract", contract.projectName || contract.contractTitle, contract.clientName)}
-                    style={secondaryBtn(colors)}
-                  >
+                  <button onClick={() => saveCurrentOutput("contract", contract.projectName || contract.contractTitle, contract.clientName)} style={secondaryBtn(colors)}>
                     Save Contract
                   </button>
                 )}
