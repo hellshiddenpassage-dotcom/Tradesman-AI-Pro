@@ -1,10 +1,25 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { scoreLead, scoreBucket } from "./leadEngine";
 
 type Language = "English" | "Spanish" | "French" | "German" | "Portuguese";
 
 type Customer = {
   name: string;
   created: string;
+};
+
+type LeadRow = {
+  id: string;
+  title: string;
+  description: string;
+  city: string;
+  source: string;
+  contact_name: string;
+  contact_info: string;
+  budget: string;
+  score: number;
+  status: string;
+  created_at: string;
 };
 
 type EstimateData = {
@@ -24,6 +39,14 @@ type EstimateData = {
 
 const BASIC_STRIPE_LINK = "https://buy.stripe.com/eVqdR26372Cb7BW8Y5d7q03";
 const PRO_STRIPE_LINK = "https://buy.stripe.com/dRmfZa3UZa4D7BWgqxd7q04";
+const SUPABASE_URL = "https://ljizlaabarhyzocfcsba.supabase.co";
+const SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqaXpsYWFiYXJoeXpvY2Zjc2JhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1ODcxNTIsImV4cCI6MjA4OTE2MzE1Mn0.eJstZOcLE_BALH1JMhju4zQonRxMQwk5DbEXpYUIKbw";
+
+const supabase = (window as any).supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY
+);
 
 const LANGUAGES: Language[] = [
   "English",
@@ -167,23 +190,19 @@ function money(value: number): string {
 
 function detectJobType(description: string): string {
   const text = description.toLowerCase();
-
   if (text.includes("fence")) return "Fence Work";
-  if (text.includes("gravel") || text.includes("road base")) return "Gravel / Base Work";
+  if (text.includes("gravel") || text.includes("road base"))
+    return "Gravel / Base Work";
   if (text.includes("driveway")) return "Driveway Work";
   if (text.includes("pad")) return "Pad Prep";
   if (text.includes("brush") || text.includes("clear")) return "Brush Clearing";
   if (text.includes("concrete")) return "Concrete Work";
-  if (text.includes("demo") || text.includes("demolition") || text.includes("remove")) {
+  if (text.includes("demo") || text.includes("demolition") || text.includes("remove"))
     return "Demolition / Removal";
-  }
-  if (text.includes("excavat") || text.includes("dig") || text.includes("trench")) {
+  if (text.includes("excavat") || text.includes("dig") || text.includes("trench"))
     return "Excavation";
-  }
-  if (text.includes("alternator") || text.includes("repair") || text.includes("mechanic")) {
+  if (text.includes("alternator") || text.includes("repair") || text.includes("mechanic"))
     return "Mechanical Repair";
-  }
-
   return "General Contract Work";
 }
 
@@ -512,6 +531,77 @@ function PricingCard({
   );
 }
 
+function LeadCard({
+  lead,
+  onStatus,
+  onDelete,
+}: {
+  lead: LeadRow;
+  onStatus: (id: string, status: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  return (
+    <div
+      style={{
+        border: "1px solid #e5e7eb",
+        borderRadius: 12,
+        padding: 14,
+        background: "white",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+        <div>
+          <div style={{ fontWeight: 800 }}>{lead.title || "Untitled Lead"}</div>
+          <div style={{ color: "#6b7280", fontSize: 13 }}>
+            {lead.city || "No city"} • {lead.source || "manual"} • {lead.created_at}
+          </div>
+        </div>
+        <div
+          style={{
+            padding: "6px 10px",
+            borderRadius: 999,
+            background:
+              scoreBucket(lead.score) === "Hot"
+                ? "#fee2e2"
+                : scoreBucket(lead.score) === "Warm"
+                ? "#fef3c7"
+                : "#e5e7eb",
+            fontWeight: 800,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {scoreBucket(lead.score)} • {lead.score}
+        </div>
+      </div>
+
+      <div style={{ marginTop: 10, whiteSpace: "pre-wrap" }}>
+        {lead.description || "No description"}
+      </div>
+
+      <div style={{ marginTop: 10, color: "#374151" }}>
+        <div>Contact: {lead.contact_name || "-"} / {lead.contact_info || "-"}</div>
+        <div>Budget: {lead.budget || "-"}</div>
+        <div>Status: <strong>{lead.status}</strong></div>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+        <button onClick={() => onStatus(lead.id, "contacted")} style={buttonStyle("secondary")}>
+          Mark Contacted
+        </button>
+        <button onClick={() => onStatus(lead.id, "quoted")} style={buttonStyle("secondary")}>
+          Mark Quoted
+        </button>
+        <button onClick={() => onStatus(lead.id, "won")} style={buttonStyle("secondary")}>
+          Mark Won
+        </button>
+        <button onClick={() => onDelete(lead.id)} style={buttonStyle("secondary")}>
+          Delete
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function buttonStyle(
   variant: "primary" | "secondary" = "primary"
 ): React.CSSProperties {
@@ -527,6 +617,9 @@ function buttonStyle(
 }
 
 export default function App() {
+  const [session, setSession] = useState<any>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerName, setCustomerName] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState("");
@@ -538,11 +631,144 @@ export default function App() {
   const [translationPreview, setTranslationPreview] = useState("");
   const [selectedText, setSelectedText] = useState("");
 
+  const [leadTitle, setLeadTitle] = useState("");
+  const [leadDescription, setLeadDescription] = useState("");
+  const [leadCity, setLeadCity] = useState("");
+  const [leadContactName, setLeadContactName] = useState("");
+  const [leadContactInfo, setLeadContactInfo] = useState("");
+  const [leadBudget, setLeadBudget] = useState("");
+  const [leads, setLeads] = useState<LeadRow[]>([]);
+  const [leadStatusFilter, setLeadStatusFilter] = useState("all");
+
   const outputRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    supabase.auth.getSession().then((result: any) => {
+      if (!mounted) return;
+      setSession(result?.data?.session ?? null);
+      setAuthLoading(false);
+    });
+
+    const authListener = supabase.auth.onAuthStateChange(
+      async (_event: any, nextSession: any) => {
+        setSession(nextSession);
+        setAuthLoading(false);
+      }
+    );
+
+    return () => {
+      mounted = false;
+      authListener?.data?.subscription?.unsubscribe?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (session?.user?.id) {
+      void loadLeads(session.user.id);
+    } else {
+      setLeads([]);
+    }
+  }, [session]);
+
+  async function loadLeads(userId: string) {
+    const result = await supabase
+      .from("leads")
+      .select("*")
+      .eq("user_id", userId)
+      .order("score", { ascending: false })
+      .order("created_at", { ascending: false });
+
+    if (!result.error) {
+      const mapped = (result.data || []).map((row: any) => ({
+        ...row,
+        created_at: row.created_at
+          ? new Date(row.created_at).toLocaleString()
+          : "",
+      }));
+      setLeads(mapped);
+    }
+  }
+
+  async function addLead() {
+    if (!session?.user?.id) {
+      alert("Sign in first.");
+      return;
+    }
+
+    const combined = `${leadTitle}\n${leadDescription}\n${leadCity}\n${leadBudget}\n${leadContactName}\n${leadContactInfo}`;
+    const scored = scoreLead(combined);
+
+    const result = await supabase.from("leads").insert({
+      user_id: session.user.id,
+      source: "manual",
+      title: leadTitle,
+      description: leadDescription,
+      city: leadCity,
+      contact_name: leadContactName,
+      contact_info: leadContactInfo,
+      budget: leadBudget,
+      score: scored.score,
+      status: "new",
+    });
+
+    if (result.error) {
+      alert(result.error.message);
+      return;
+    }
+
+    setLeadTitle("");
+    setLeadDescription("");
+    setLeadCity("");
+    setLeadContactName("");
+    setLeadContactInfo("");
+    setLeadBudget("");
+
+    await loadLeads(session.user.id);
+  }
+
+  async function updateLeadStatus(id: string, status: string) {
+    if (!session?.user?.id) return;
+
+    const result = await supabase.from("leads").update({ status }).eq("id", id);
+    if (result.error) {
+      alert(result.error.message);
+      return;
+    }
+
+    await loadLeads(session.user.id);
+  }
+
+  async function deleteLead(id: string) {
+    if (!session?.user?.id) return;
+
+    const result = await supabase.from("leads").delete().eq("id", id);
+    if (result.error) {
+      alert(result.error.message);
+      return;
+    }
+
+    await loadLeads(session.user.id);
+  }
 
   const liveEstimate = useMemo(() => {
     return generateEstimateData(jobDescription || "General contractor job");
   }, [jobDescription]);
+
+  const filteredLeads = useMemo(() => {
+    if (leadStatusFilter === "all") return leads;
+    return leads.filter((lead) => lead.status === leadStatusFilter);
+  }, [leads, leadStatusFilter]);
+
+  const leadStats = useMemo(() => {
+    return {
+      total: leads.length,
+      hot: leads.filter((l) => scoreBucket(l.score) === "Hot").length,
+      won: leads.filter((l) => l.status === "won").length,
+      quoted: leads.filter((l) => l.status === "quoted").length,
+    };
+  }, [leads]);
 
   const addCustomer = () => {
     if (!customerName.trim()) return;
@@ -616,6 +842,18 @@ export default function App() {
     setOutput(translationPreview);
   };
 
+  if (authLoading) {
+    return <div style={{ padding: 32 }}>Loading...</div>;
+  }
+
+  if (!session) {
+    return (
+      <div style={{ padding: 32, fontFamily: "Arial, sans-serif" }}>
+        Sign in to use the lead engine and save leads to your account.
+      </div>
+    );
+  }
+
   return (
     <div
       style={{
@@ -628,8 +866,7 @@ export default function App() {
     >
       <h1 style={{ marginBottom: 8 }}>Tradesman AI</h1>
       <p style={{ color: "#4b5563", marginTop: 0 }}>
-        AI-style business tools for contractors, mechanics, and trades
-        professionals.
+        Estimate engine, translation tools, and contractor lead board.
       </p>
 
       <div
@@ -749,8 +986,8 @@ export default function App() {
               price="$99/mo"
               bullets={[
                 "Everything in Pro",
-                "Multi-user team workflow",
-                "Shared dashboard",
+                "Lead board workflow",
+                "Shared dashboard later",
                 "Priority support",
               ]}
               buttonText="Coming Soon"
@@ -888,8 +1125,7 @@ export default function App() {
 
         <div style={{ color: "#6b7280", fontSize: 13, marginBottom: 12 }}>
           Highlight text inside the output box, then click{" "}
-          <strong>Translate Selected Text</strong>. The built-in translator works
-          best on app-generated estimate text.
+          <strong>Translate Selected Text</strong>.
         </div>
 
         <textarea
@@ -946,6 +1182,175 @@ export default function App() {
           </div>
         </div>
       </div>
+
+      <div
+        style={{
+          border: "1px solid #e5e7eb",
+          borderRadius: 14,
+          padding: 20,
+          marginBottom: 24,
+        }}
+      >
+        <h2 style={{ marginTop: 0 }}>Lead Finder Engine</h2>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3, 1fr)",
+            gap: 12,
+            marginBottom: 16,
+          }}
+        >
+          <div
+            style={{
+              border: "1px solid #e5e7eb",
+              borderRadius: 12,
+              padding: 14,
+              background: "#f8fafc",
+            }}
+          >
+            <div style={{ color: "#6b7280", fontSize: 12 }}>Total Leads</div>
+            <div style={{ fontWeight: 900, fontSize: 24 }}>{leadStats.total}</div>
+          </div>
+          <div
+            style={{
+              border: "1px solid #e5e7eb",
+              borderRadius: 12,
+              padding: 14,
+              background: "#f8fafc",
+            }}
+          >
+            <div style={{ color: "#6b7280", fontSize: 12 }}>Hot Leads</div>
+            <div style={{ fontWeight: 900, fontSize: 24 }}>{leadStats.hot}</div>
+          </div>
+          <div
+            style={{
+              border: "1px solid #e5e7eb",
+              borderRadius: 12,
+              padding: 14,
+              background: "#f8fafc",
+            }}
+          >
+            <div style={{ color: "#6b7280", fontSize: 12 }}>Won Leads</div>
+            <div style={{ fontWeight: 900, fontSize: 24 }}>{leadStats.won}</div>
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 12,
+            marginBottom: 12,
+          }}
+        >
+          <input
+            value={leadTitle}
+            onChange={(e) => setLeadTitle(e.target.value)}
+            placeholder="Lead title"
+            style={inputBox()}
+          />
+          <input
+            value={leadCity}
+            onChange={(e) => setLeadCity(e.target.value)}
+            placeholder="City"
+            style={inputBox()}
+          />
+        </div>
+
+        <textarea
+          value={leadDescription}
+          onChange={(e) => setLeadDescription(e.target.value)}
+          placeholder="Paste the lead text here. Example: Need 20x30 shop pad, gravel driveway, and brush clearing in Scottsbluff. Need quote ASAP. Budget around $4,000. Call 308-555-1111."
+          style={{
+            width: "100%",
+            minHeight: 110,
+            padding: 12,
+            borderRadius: 10,
+            border: "1px solid #d1d5db",
+            resize: "vertical",
+            boxSizing: "border-box",
+            marginBottom: 12,
+          }}
+        />
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr 1fr",
+            gap: 12,
+            marginBottom: 12,
+          }}
+        >
+          <input
+            value={leadContactName}
+            onChange={(e) => setLeadContactName(e.target.value)}
+            placeholder="Contact name"
+            style={inputBox()}
+          />
+          <input
+            value={leadContactInfo}
+            onChange={(e) => setLeadContactInfo(e.target.value)}
+            placeholder="Phone or email"
+            style={inputBox()}
+          />
+          <input
+            value={leadBudget}
+            onChange={(e) => setLeadBudget(e.target.value)}
+            placeholder="Budget"
+            style={inputBox()}
+          />
+        </div>
+
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 18 }}>
+          <button onClick={() => void addLead()} style={buttonStyle()}>
+            Save Lead + Score
+          </button>
+
+          <select
+            value={leadStatusFilter}
+            onChange={(e) => setLeadStatusFilter(e.target.value)}
+            style={{
+              padding: "12px",
+              borderRadius: 10,
+              border: "1px solid #d1d5db",
+            }}
+          >
+            <option value="all">All statuses</option>
+            <option value="new">New</option>
+            <option value="contacted">Contacted</option>
+            <option value="quoted">Quoted</option>
+            <option value="won">Won</option>
+          </select>
+        </div>
+
+        <div style={{ display: "grid", gap: 12 }}>
+          {filteredLeads.length === 0 ? (
+            <div style={{ color: "#6b7280" }}>
+              No leads yet. Paste one in and the engine will score it.
+            </div>
+          ) : (
+            filteredLeads.map((lead) => (
+              <LeadCard
+                key={lead.id}
+                lead={lead}
+                onStatus={updateLeadStatus}
+                onDelete={deleteLead}
+              />
+            ))
+          )}
+        </div>
+      </div>
     </div>
   );
+}
+
+function inputBox(): React.CSSProperties {
+  return {
+    width: "100%",
+    padding: 12,
+    borderRadius: 10,
+    border: "1px solid #d1d5db",
+    boxSizing: "border-box",
+  };
 }
