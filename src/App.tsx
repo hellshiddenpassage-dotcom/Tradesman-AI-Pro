@@ -39,9 +39,9 @@ type EstimateData = {
   recommendations: string[];
 };
 
-const BASIC_STRIPE_LINK = "https://buy.stripe.com/eVqdR26372Cb7BW8Y5d7q03";
-const PRO_STRIPE_LINK = "https://buy.stripe.com/dRmfZa3UZa4D7BWgqxd7q04";
-const TEAM_STRIPE_LINK = "https://buy.stripe.com/7sYdR277b3Gf8G0fmtd7q05";
+const BASIC_STRIPE_LINK = "https://buy.stripe.com/6oU3cocrv2Cb7BW7U1d7q06";
+const PRO_STRIPE_LINK = "https://buy.stripe.com/eVqdR21MRfoX3lGeipd7q07";
+const TEAM_STRIPE_LINK = "https://buy.stripe.com/3cI9AM77b2Cb2hCcahd7q08";
 
 const SUPABASE_URL = "https://ljizlaabarhyzocfcsba.supabase.co";
 const SUPABASE_ANON_KEY =
