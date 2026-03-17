@@ -1243,9 +1243,20 @@ ${result.offer}
         </div>
 
         {session ? (
-          <button onClick={handleSignOut} style={buttonStyle("secondary")}>
-            Sign Out
-          </button>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button onClick={() => setPlan("basic")} style={buttonStyle("secondary")}>
+              Basic
+            </button>
+            <button onClick={() => setPlan("pro")} style={buttonStyle("secondary")}>
+              Pro
+            </button>
+            <button onClick={() => setPlan("team")} style={buttonStyle("secondary")}>
+              Team
+            </button>
+            <button onClick={handleSignOut} style={buttonStyle("secondary")}>
+              Sign Out
+            </button>
+          </div>
         ) : (
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button onClick={() => setAuthMode("signin")} style={buttonStyle("secondary")}>
@@ -1300,29 +1311,6 @@ ${result.offer}
               buttonText="Choose Team"
               onClick={() => window.open(TEAM_STRIPE_LINK, "_blank")}
             />
-          </div>
-
-          <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div
-              style={{
-                background: "#fff7ed",
-                border: "1px solid #fdba74",
-                borderRadius: 10,
-                padding: 12,
-              }}
-            >
-              <strong>Free estimates used:</strong> {freeEstimateUses} / 3
-            </div>
-            <div
-              style={{
-                background: "#eef2ff",
-                border: "1px solid #c7d2fe",
-                borderRadius: 10,
-                padding: 12,
-              }}
-            >
-              <strong>Live pricing:</strong> labor rate + markup are applied to every estimate.
-            </div>
           </div>
         </div>
       )}
@@ -1385,34 +1373,50 @@ ${result.offer}
         </div>
       )}
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 24,
-          marginTop: 8,
-          marginBottom: 24,
-        }}
-      >
-        <div style={{ border: "1px solid #e5e7eb", borderRadius: 14, padding: 20 }}>
-          <h2 style={{ marginTop: 0 }}>Company Settings</h2>
+      <div style={{ border: "1px solid #e5e7eb", borderRadius: 14, padding: 20, marginBottom: 24 }}>
+        <h2 style={{ marginTop: 0 }}>Instant Estimate Tool</h2>
 
-          <div style={{ display: "grid", gap: 12 }}>
-            <input
-              value={companyName}
-              onChange={(e) => setCompanyName(e.target.value)}
-              placeholder="Company Name"
-              style={inputBox()}
-            />
-
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: session ? "1fr 1fr 1fr" : "1fr 1fr",
+            gap: 12,
+            marginBottom: 14,
+          }}
+        >
+          <input
+            value={companyName}
+            onChange={(e) => setCompanyName(e.target.value)}
+            placeholder="Company Name"
+            style={inputBox()}
+          />
+          <input
+            type="number"
+            value={laborRateSetting}
+            onChange={(e) => setLaborRateSetting(Number(e.target.value))}
+            placeholder="Labor Rate"
+            style={inputBox()}
+          />
+          {session && (
             <input
               type="number"
-              value={laborRateSetting}
-              onChange={(e) => setLaborRateSetting(Number(e.target.value))}
-              placeholder="Labor Rate"
+              value={markupSetting}
+              onChange={(e) => setMarkupSetting(Number(e.target.value))}
+              placeholder="Markup %"
               style={inputBox()}
             />
+          )}
+        </div>
 
+        {!session && (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr",
+              gap: 12,
+              marginBottom: 14,
+            }}
+          >
             <input
               type="number"
               value={markupSetting}
@@ -1421,94 +1425,7 @@ ${result.offer}
               style={inputBox()}
             />
           </div>
-
-          <div
-            style={{
-              marginTop: 14,
-              background: "#f8fafc",
-              border: "1px solid #e5e7eb",
-              borderRadius: 10,
-              padding: 12,
-              lineHeight: 1.8,
-            }}
-          >
-            <div><strong>Company:</strong> {companyName || "Not set"}</div>
-            <div><strong>Labor Rate:</strong> {money(laborRateSetting)}</div>
-            <div><strong>Markup:</strong> {markupSetting}%</div>
-          </div>
-        </div>
-
-        <div style={{ border: "1px solid #e5e7eb", borderRadius: 14, padding: 20 }}>
-          <h2 style={{ marginTop: 0 }}>Plans + Access</h2>
-
-          <div style={{ display: "grid", gap: 12, marginBottom: 16 }}>
-            <PricingCard
-              title="Basic"
-              price="$19/mo"
-              bullets={[
-                "Unlimited estimates",
-                "Company settings",
-                "Translation tools",
-                "Customer manager",
-              ]}
-              buttonText="Subscribe"
-              onClick={() => window.open(BASIC_STRIPE_LINK, "_blank")}
-              highlighted={plan === "basic"}
-            />
-            <PricingCard
-              title="Pro"
-              price="$49/mo"
-              bullets={[
-                "Everything in Basic",
-                "Lead inbox",
-                "AI replies",
-                "Marketing generator",
-              ]}
-              buttonText="Upgrade"
-              onClick={() => window.open(PRO_STRIPE_LINK, "_blank")}
-              highlighted={plan === "pro"}
-            />
-            <PricingCard
-              title="Team"
-              price="$99/mo"
-              bullets={[
-                "Everything in Pro",
-                "Team positioning",
-                "Shared-office use case",
-                "Priority support",
-              ]}
-              buttonText="Get Team"
-              onClick={() => window.open(TEAM_STRIPE_LINK, "_blank")}
-              highlighted={plan === "team"}
-            />
-          </div>
-
-          <div
-            style={{
-              border: "1px solid #e5e7eb",
-              borderRadius: 12,
-              padding: 12,
-              background: "#f8fafc",
-            }}
-          >
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>Dev Plan Switcher</div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button onClick={() => setPlan("basic")} style={buttonStyle("secondary")}>
-                Set Basic
-              </button>
-              <button onClick={() => setPlan("pro")} style={buttonStyle("secondary")}>
-                Set Pro
-              </button>
-              <button onClick={() => setPlan("team")} style={buttonStyle("secondary")}>
-                Set Team
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div style={{ border: "1px solid #e5e7eb", borderRadius: 14, padding: 20, marginBottom: 24 }}>
-        <h2 style={{ marginTop: 0 }}>Instant Estimate Tool</h2>
+        )}
 
         <div
           style={{
@@ -1589,61 +1506,63 @@ ${result.offer}
         </div>
       </div>
 
-      <div style={{ border: "1px solid #e5e7eb", borderRadius: 14, padding: 20, marginBottom: 24 }}>
-        <h2 style={{ marginTop: 0 }}>Customer Manager</h2>
+      {session && (
+        <div style={{ border: "1px solid #e5e7eb", borderRadius: 14, padding: 20, marginBottom: 24 }}>
+          <h2 style={{ marginTop: 0 }}>Customer Manager</h2>
 
-        <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
-          <input
-            value={customerName}
-            onChange={(e) => setCustomerName(e.target.value)}
-            placeholder="Customer Name"
-            style={{ ...inputBox(), flex: 1 }}
-          />
-          <button onClick={addCustomer} style={buttonStyle()}>
-            Add
-          </button>
-        </div>
+          <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
+            <input
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+              placeholder="Customer Name"
+              style={{ ...inputBox(), flex: 1 }}
+            />
+            <button onClick={addCustomer} style={buttonStyle()}>
+              Add
+            </button>
+          </div>
 
-        <select
-          value={selectedCustomer}
-          onChange={(e) => setSelectedCustomer(e.target.value)}
-          style={{
-            width: "100%",
-            padding: "12px",
-            borderRadius: 10,
-            border: "1px solid #d1d5db",
-            marginBottom: 16,
-          }}
-        >
-          <option value="">Select Customer</option>
-          {customers.map((c, i) => (
-            <option key={`${c.name}-${i}`} value={c.name}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+          <select
+            value={selectedCustomer}
+            onChange={(e) => setSelectedCustomer(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "12px",
+              borderRadius: 10,
+              border: "1px solid #d1d5db",
+              marginBottom: 16,
+            }}
+          >
+            <option value="">Select Customer</option>
+            {customers.map((c, i) => (
+              <option key={`${c.name}-${i}`} value={c.name}>
+                {c.name}
+              </option>
+            ))}
+          </select>
 
-        <div style={{ maxHeight: 220, overflowY: "auto" }}>
-          {customers.length === 0 ? (
-            <div style={{ color: "#6b7280" }}>No customers yet.</div>
-          ) : (
-            customers.map((c, i) => (
-              <div
-                key={`${c.name}-${i}`}
-                style={{
-                  padding: "10px 0",
-                  borderBottom: "1px solid #f1f5f9",
-                }}
-              >
-                <strong>{c.name}</strong>
-                <div style={{ fontSize: 12, color: "#6b7280" }}>
-                  Added {c.created}
+          <div style={{ maxHeight: 220, overflowY: "auto" }}>
+            {customers.length === 0 ? (
+              <div style={{ color: "#6b7280" }}>No customers yet.</div>
+            ) : (
+              customers.map((c, i) => (
+                <div
+                  key={`${c.name}-${i}`}
+                  style={{
+                    padding: "10px 0",
+                    borderBottom: "1px solid #f1f5f9",
+                  }}
+                >
+                  <strong>{c.name}</strong>
+                  <div style={{ fontSize: 12, color: "#6b7280" }}>
+                    Added {c.created}
+                  </div>
                 </div>
-              </div>
-            ))
-          )}
+              ))
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       <div style={{ border: "1px solid #e5e7eb", borderRadius: 14, padding: 20, marginBottom: 24 }}>
         <h2 style={{ marginTop: 0 }}>Language + Translate Tools</h2>
@@ -1691,7 +1610,7 @@ ${result.offer}
           value={output}
           onChange={(e) => setOutput(e.target.value)}
           onSelect={handleSelection}
-          placeholder="Generated estimate output, AI reply, or launch checklist will appear here..."
+          placeholder="Generated estimate output, AI reply, or translated output will appear here..."
           style={{
             width: "100%",
             minHeight: 320,
