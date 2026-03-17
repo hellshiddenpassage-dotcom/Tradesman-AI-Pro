@@ -831,28 +831,6 @@ function PipelineColumn({
   );
 }
 
-function LandingStat({
-  title,
-  text,
-}: {
-  title: string;
-  text: string;
-}) {
-  return (
-    <div
-      style={{
-        background: "#111827",
-        border: "1px solid #334155",
-        borderRadius: 16,
-        padding: 16,
-      }}
-    >
-      <div style={{ fontWeight: 900, marginBottom: 8 }}>{title}</div>
-      <div style={{ color: "#a8b3c7", lineHeight: 1.6 }}>{text}</div>
-    </div>
-  );
-}
-
 export default function App() {
   const [session, setSession] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState(true);
