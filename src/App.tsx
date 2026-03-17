@@ -1,10 +1,4 @@
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties,
-} from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { scoreLead, scoreBucket } from "./leadEngine";
 import { generateMarketing } from "./marketingEngine";
 
@@ -45,6 +39,12 @@ type EstimateData = {
   recommendations: string[];
 };
 
+declare global {
+  interface Window {
+    supabase: any;
+  }
+}
+
 const BASIC_STRIPE_LINK = "https://buy.stripe.com/6oU3cocrv2Cb7BW7U1d7q06";
 const PRO_STRIPE_LINK = "https://buy.stripe.com/eVqdR21MRfoX3lGeipd7q07";
 const TEAM_STRIPE_LINK = "https://buy.stripe.com/3cI9AM77b2Cb2hCcahd7q08";
@@ -52,14 +52,6 @@ const TEAM_STRIPE_LINK = "https://buy.stripe.com/3cI9AM77b2Cb2hCcahd7q08";
 const SUPABASE_URL = "https://ljizlaabarhyzocfcsba.supabase.co";
 const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqaXpsYWFiYXJoeXpvY2Zjc2JhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1ODcxNTIsImV4cCI6MjA4OTE2MzE1Mn0.eJstZOcLE_BALH1JMhju4zQonRxMQwk5DbEXpYUIKbw";
-
-declare global {
-  interface Window {
-    supabase: any;
-  }
-}
-
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const LANGUAGES: Language[] = [
   "English",
@@ -564,7 +556,7 @@ function buildContractorInboxAssistant(
       ? "Lead looks strong. Fast response is the priority."
       : bucket === "Warm"
       ? "Lead has potential. Clarify timeline, access, and exact scope."
-      : "Lower intent lead. Keep reply short and move for qualification.";
+      : "Lower intent lead. Keep reply short and qualify the project fast.";
 
   return {
     score: scored.score,
@@ -578,45 +570,9 @@ function buildContractorInboxAssistant(
   };
 }
 
-function FeatureChip({
-  children,
-  tone,
-}: {
-  children: string;
-  tone?: "pink" | "blue" | "gold";
-}) {
-  const bg =
-    tone === "pink"
-      ? "rgba(244,114,182,0.15)"
-      : tone === "gold"
-      ? "rgba(251,191,36,0.16)"
-      : "rgba(99,102,241,0.16)";
-
-  const border =
-    tone === "pink"
-      ? "1px solid rgba(244,114,182,0.35)"
-      : tone === "gold"
-      ? "1px solid rgba(251,191,36,0.35)"
-      : "1px solid rgba(99,102,241,0.35)";
-
-  return (
-    <div
-      style={{
-        padding: "10px 12px",
-        borderRadius: 999,
-        background: bg,
-        border,
-        color: "#e5e7eb",
-        fontSize: 13,
-        fontWeight: 700,
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
 export default function App() {
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
   const [session, setSession] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
@@ -669,6 +625,34 @@ export default function App() {
 
   const outputRef = useRef<HTMLTextAreaElement | null>(null);
 
+  const primaryButtonStyle = {
+    background: "#6366f1",
+    color: "#fff",
+    border: "none",
+    borderRadius: 12,
+    padding: "11px 16px",
+    cursor: "pointer",
+    fontWeight: 800,
+  };
+
+  const secondaryButtonStyle = {
+    background: "#fff",
+    color: "#111827",
+    border: "1px solid #d1d5db",
+    borderRadius: 12,
+    padding: "11px 16px",
+    cursor: "pointer",
+    fontWeight: 800,
+  };
+
+  const inputStyle = {
+    width: "100%",
+    padding: 12,
+    borderRadius: 12,
+    border: "1px solid #d1d5db",
+    boxSizing: "border-box" as const,
+  };
+
   useEffect(() => {
     localStorage.setItem("companyName", companyName);
   }, [companyName]);
@@ -705,7 +689,7 @@ export default function App() {
       mounted = false;
       authListener?.data?.subscription?.unsubscribe?.();
     };
-  }, []);
+  }, [supabase.auth]);
 
   useEffect(() => {
     if (session?.user?.id) {
@@ -1027,7 +1011,7 @@ ${result.offer}
   };
 
   if (authLoading) {
-    return <div style={{ padding: 32 }}>Loading...</div>;
+    return <div style={{ padding: 32, color: "white" }}>Loading...</div>;
   }
 
   return (
@@ -1040,7 +1024,7 @@ ${result.offer}
         color: "#111827",
       }}
     >
-      <div style={{ maxWidth: 1220, margin: "0 auto", padding: "28px" }}>
+      <div style={{ maxWidth: 1220, margin: "0 auto", padding: 28 }}>
         <div
           style={{
             display: "grid",
@@ -1089,17 +1073,46 @@ ${result.offer}
               a real closing system.
             </p>
 
-            <div
-              style={{
-                display: "flex",
-                gap: 10,
-                flexWrap: "wrap",
-                marginTop: 18,
-              }}
-            >
-              <FeatureChip>Instant estimate generator</FeatureChip>
-              <FeatureChip tone="pink">Contractor inbox assistant</FeatureChip>
-              <FeatureChip tone="gold">AI marketing tools</FeatureChip>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
+              <div
+                style={{
+                  padding: "10px 12px",
+                  borderRadius: 999,
+                  background: "rgba(99,102,241,0.16)",
+                  border: "1px solid rgba(99,102,241,0.35)",
+                  color: "#e5e7eb",
+                  fontSize: 13,
+                  fontWeight: 700,
+                }}
+              >
+                Instant estimate generator
+              </div>
+              <div
+                style={{
+                  padding: "10px 12px",
+                  borderRadius: 999,
+                  background: "rgba(244,114,182,0.15)",
+                  border: "1px solid rgba(244,114,182,0.35)",
+                  color: "#e5e7eb",
+                  fontSize: 13,
+                  fontWeight: 700,
+                }}
+              >
+                Contractor inbox assistant
+              </div>
+              <div
+                style={{
+                  padding: "10px 12px",
+                  borderRadius: 999,
+                  background: "rgba(251,191,36,0.16)",
+                  border: "1px solid rgba(251,191,36,0.35)",
+                  color: "#e5e7eb",
+                  fontSize: 13,
+                  fontWeight: 700,
+                }}
+              >
+                AI marketing tools
+              </div>
             </div>
           </div>
 
@@ -1116,13 +1129,13 @@ ${result.offer}
                 <div style={{ fontWeight: 900, fontSize: 26 }}>Tradesman AI</div>
                 <div style={{ color: "#4b5563", marginTop: 4 }}>
                   {session?.user?.email
-                    ? `Signed in as ${session.user.email}`
+                    ? `Signed in as ${session.user.email} • ${plan.toUpperCase()}`
                     : `3 free public estimates before upgrade`}
                 </div>
               </div>
 
               {session ? (
-                <button onClick={handleSignOut} style={buttonStyle("secondary")}>
+                <button onClick={handleSignOut} style={secondaryButtonStyle}>
                   Sign Out
                 </button>
               ) : null}
@@ -1136,43 +1149,77 @@ ${result.offer}
                 marginTop: 18,
               }}
             >
-              <PricingCard
-                title="Basic"
-                price="$19/mo"
-                bullets={[
-                  "Unlimited estimates",
-                  "Company pricing settings",
-                  "Translation tools",
-                  "Core workflow",
-                ]}
-                buttonText="Choose Basic"
-                onClick={() => window.open(BASIC_STRIPE_LINK, "_blank")}
-              />
-              <PricingCard
-                title="Pro"
-                price="$49/mo"
-                bullets={[
-                  "Everything in Basic",
-                  "Lead inbox",
-                  "AI replies",
-                  "Marketing generator",
-                ]}
-                buttonText="Choose Pro"
-                onClick={() => window.open(PRO_STRIPE_LINK, "_blank")}
-                highlighted
-              />
-              <PricingCard
-                title="Team"
-                price="$99/mo"
-                bullets={[
-                  "Everything in Pro",
-                  "Shared office use",
-                  "Team positioning",
-                  "Priority support",
-                ]}
-                buttonText="Choose Team"
-                onClick={() => window.open(TEAM_STRIPE_LINK, "_blank")}
-              />
+              <div
+                style={{
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 12,
+                  padding: 16,
+                  background: "#ffffff",
+                }}
+              >
+                <div style={{ fontWeight: 800, fontSize: 18 }}>Basic</div>
+                <div style={{ fontSize: 24, fontWeight: 800, margin: "8px 0 12px" }}>$19/mo</div>
+                <ul style={{ paddingLeft: 18, marginBottom: 12 }}>
+                  <li>Unlimited estimates</li>
+                  <li>Company pricing settings</li>
+                  <li>Translation tools</li>
+                  <li>Core workflow</li>
+                </ul>
+                <button
+                  onClick={() => window.open(BASIC_STRIPE_LINK, "_blank")}
+                  style={primaryButtonStyle}
+                >
+                  Choose Basic
+                </button>
+              </div>
+
+              <div
+                style={{
+                  border: "2px solid #6366f1",
+                  borderRadius: 12,
+                  padding: 16,
+                  background: "#eef2ff",
+                }}
+              >
+                <div style={{ fontWeight: 800, fontSize: 18 }}>Pro</div>
+                <div style={{ fontSize: 24, fontWeight: 800, margin: "8px 0 12px" }}>$49/mo</div>
+                <ul style={{ paddingLeft: 18, marginBottom: 12 }}>
+                  <li>Everything in Basic</li>
+                  <li>Lead inbox</li>
+                  <li>AI replies</li>
+                  <li>Marketing generator</li>
+                </ul>
+                <button
+                  onClick={() => window.open(PRO_STRIPE_LINK, "_blank")}
+                  style={primaryButtonStyle}
+                >
+                  Choose Pro
+                </button>
+              </div>
+
+              <div
+                style={{
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 12,
+                  padding: 16,
+                  background: "#ffffff",
+                }}
+              >
+                <div style={{ fontWeight: 800, fontSize: 18 }}>Team</div>
+                <div style={{ fontSize: 24, fontWeight: 800, margin: "8px 0 12px" }}>$99/mo</div>
+                <ul style={{ paddingLeft: 18, marginBottom: 12 }}>
+                  <li>Everything in Pro</li>
+                  <li>Shared office use</li>
+                  <li>Team positioning</li>
+                  <li>Priority support</li>
+                </ul>
+                <button
+                  onClick={() => window.open(TEAM_STRIPE_LINK, "_blank")}
+                  style={primaryButtonStyle}
+                >
+                  Choose Team
+                </button>
+              </div>
             </div>
 
             {!session && (
@@ -1210,13 +1257,13 @@ ${result.offer}
             <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
               <button
                 onClick={() => setAuthMode("signin")}
-                style={authMode === "signin" ? buttonStyle() : buttonStyle("secondary")}
+                style={authMode === "signin" ? primaryButtonStyle : secondaryButtonStyle}
               >
                 Sign In
               </button>
               <button
                 onClick={() => setAuthMode("signup")}
-                style={authMode === "signup" ? buttonStyle() : buttonStyle("secondary")}
+                style={authMode === "signup" ? primaryButtonStyle : secondaryButtonStyle}
               >
                 Sign Up
               </button>
@@ -1228,27 +1275,51 @@ ${result.offer}
                 placeholder="Email"
                 value={authEmail}
                 onChange={(e) => setAuthEmail(e.target.value)}
-                style={inputBox()}
+                style={inputStyle}
               />
               <input
                 type="password"
                 placeholder="Password"
                 value={authPassword}
                 onChange={(e) => setAuthPassword(e.target.value)}
-                style={inputBox()}
+                style={inputStyle}
               />
               {authMode === "signin" ? (
-                <button onClick={handleSignIn} style={buttonStyle()}>
+                <button onClick={handleSignIn} style={primaryButtonStyle}>
                   Sign In
                 </button>
               ) : (
-                <button onClick={handleSignUp} style={buttonStyle()}>
+                <button onClick={handleSignUp} style={primaryButtonStyle}>
                   Create Account
                 </button>
               )}
             </div>
 
             <div style={{ marginTop: 12, color: "#6b7280" }}>{authMessage}</div>
+          </div>
+        )}
+
+        {session && (
+          <div
+            style={{
+              background: "rgba(255,255,255,0.95)",
+              borderRadius: 20,
+              padding: 18,
+              marginBottom: 24,
+              boxShadow: "0 16px 40px rgba(10, 14, 30, 0.16)",
+            }}
+          >
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button onClick={() => setPlan("basic")} style={secondaryButtonStyle}>
+                Set Basic
+              </button>
+              <button onClick={() => setPlan("pro")} style={secondaryButtonStyle}>
+                Set Pro
+              </button>
+              <button onClick={() => setPlan("team")} style={secondaryButtonStyle}>
+                Set Team
+              </button>
+            </div>
           </div>
         )}
 
@@ -1275,21 +1346,21 @@ ${result.offer}
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
               placeholder="Company Name"
-              style={inputBox()}
+              style={inputStyle}
             />
             <input
               type="number"
               value={laborRateSetting}
               onChange={(e) => setLaborRateSetting(Number(e.target.value))}
               placeholder="Labor Rate"
-              style={inputBox()}
+              style={inputStyle}
             />
             <input
               type="number"
               value={markupSetting}
               onChange={(e) => setMarkupSetting(Number(e.target.value))}
               placeholder="Markup %"
-              style={inputBox()}
+              style={inputStyle}
             />
           </div>
 
@@ -1313,7 +1384,6 @@ ${result.offer}
                 resize: "vertical",
               }}
             />
-
             <select
               value={language}
               onChange={(e) => setLanguage(e.target.value as Language)}
@@ -1330,8 +1400,7 @@ ${result.offer}
                 </option>
               ))}
             </select>
-
-            <button onClick={generateFrontDoorEstimate} style={buttonStyle()}>
+            <button onClick={generateFrontDoorEstimate} style={primaryButtonStyle}>
               Generate Estimate
             </button>
           </div>
@@ -1348,8 +1417,7 @@ ${result.offer}
                 fontWeight: 700,
               }}
             >
-              You used your 3 free estimates. Upgrade to continue with unlimited
-              estimates, lead tools, and AI marketing.
+              You used your 3 free estimates. Upgrade to continue with unlimited estimates, lead tools, and AI marketing.
             </div>
           )}
 
@@ -1377,9 +1445,7 @@ ${result.offer}
                 <div>Materials Cost: {money(liveEstimate.materialsCost)}</div>
                 <div>Equipment Cost: {money(liveEstimate.equipmentCost)}</div>
                 <div>Markup: {liveEstimate.markupPercent}%</div>
-                <div>
-                  <strong>Total: {money(liveEstimate.total)}</strong>
-                </div>
+                <div><strong>Total: {money(liveEstimate.total)}</strong></div>
               </div>
             </div>
 
@@ -1391,12 +1457,12 @@ ${result.offer}
                 padding: 16,
               }}
             >
-              <strong>What this turns into</strong>
+              <strong>What this becomes</strong>
               <div style={{ marginTop: 10, lineHeight: 1.85, color: "#374151" }}>
                 <div>• instant estimate for the customer</div>
-                <div>• faster response than competitors</div>
+                <div>• faster first response</div>
                 <div>• cleaner quote flow</div>
-                <div>• easy upsell into inbox assistant + marketing</div>
+                <div>• upsell into inbox assistant and marketing</div>
               </div>
             </div>
           </div>
@@ -1409,13 +1475,12 @@ ${result.offer}
             padding: 22,
             marginBottom: 24,
             boxShadow: "0 16px 40px rgba(10, 14, 30, 0.16)",
-            opacity: hasAccess(plan, "pro") ? 1 : 0.92,
+            opacity: hasAccess(plan, "pro") ? 1 : 0.96,
           }}
         >
           <h2 style={{ marginTop: 0 }}>Contractor Inbox Assistant</h2>
           <p style={{ color: "#4b5563", marginTop: -2 }}>
-            Score the lead, generate the quote range, build the first reply, and
-            tee up the follow-up in one place.
+            Score the lead, generate the quote range, build the first reply, and tee up the follow-up.
           </p>
 
           {!hasAccess(plan, "pro") && (
@@ -1446,13 +1511,13 @@ ${result.offer}
               value={leadTitle}
               onChange={(e) => setLeadTitle(e.target.value)}
               placeholder="Lead title"
-              style={inputBox()}
+              style={inputStyle}
             />
             <input
               value={leadCity}
               onChange={(e) => setLeadCity(e.target.value)}
               placeholder="City"
-              style={inputBox()}
+              style={inputStyle}
             />
           </div>
 
@@ -1484,19 +1549,19 @@ ${result.offer}
               value={leadContactName}
               onChange={(e) => setLeadContactName(e.target.value)}
               placeholder="Contact name"
-              style={inputBox()}
+              style={inputStyle}
             />
             <input
               value={leadContactInfo}
               onChange={(e) => setLeadContactInfo(e.target.value)}
               placeholder="Phone or email"
-              style={inputBox()}
+              style={inputStyle}
             />
             <input
               value={leadBudget}
               onChange={(e) => setLeadBudget(e.target.value)}
               placeholder="Budget"
-              style={inputBox()}
+              style={inputStyle}
             />
           </div>
 
@@ -1508,10 +1573,22 @@ ${result.offer}
               marginBottom: 16,
             }}
           >
-            <StatCard label="Lead Score" value={String(inboxAssistant.score)} />
-            <StatCard label="Heat Bucket" value={inboxAssistant.bucket} />
-            <StatCard label="Job Type" value={inboxAssistant.jobType} />
-            <StatCard label="Quote Range" value={inboxAssistant.range} />
+            <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 12, padding: 14 }}>
+              <div style={{ fontSize: 12, color: "#6b7280" }}>Lead Score</div>
+              <div style={{ fontSize: 22, fontWeight: 800 }}>{inboxAssistant.score}</div>
+            </div>
+            <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 12, padding: 14 }}>
+              <div style={{ fontSize: 12, color: "#6b7280" }}>Heat Bucket</div>
+              <div style={{ fontSize: 22, fontWeight: 800 }}>{inboxAssistant.bucket}</div>
+            </div>
+            <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 12, padding: 14 }}>
+              <div style={{ fontSize: 12, color: "#6b7280" }}>Job Type</div>
+              <div style={{ fontSize: 22, fontWeight: 800 }}>{inboxAssistant.jobType}</div>
+            </div>
+            <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 12, padding: 14 }}>
+              <div style={{ fontSize: 12, color: "#6b7280" }}>Quote Range</div>
+              <div style={{ fontSize: 22, fontWeight: 800 }}>{inboxAssistant.range}</div>
+            </div>
           </div>
 
           <div
@@ -1534,10 +1611,7 @@ ${result.offer}
                 {inboxAssistant.quickReply}
               </div>
               <div style={{ marginTop: 12 }}>
-                <button
-                  onClick={() => setOutput(inboxAssistant.quickReply)}
-                  style={buttonStyle("secondary")}
-                >
+                <button onClick={() => setOutput(inboxAssistant.quickReply)} style={secondaryButtonStyle}>
                   Load Reply
                 </button>
               </div>
@@ -1556,10 +1630,7 @@ ${result.offer}
                 {inboxAssistant.followUp}
               </div>
               <div style={{ marginTop: 12 }}>
-                <button
-                  onClick={() => setOutput(inboxAssistant.followUp)}
-                  style={buttonStyle("secondary")}
-                >
+                <button onClick={() => setOutput(inboxAssistant.followUp)} style={secondaryButtonStyle}>
                   Load Follow-Up
                 </button>
               </div>
@@ -1587,17 +1658,20 @@ ${result.offer}
           </div>
 
           <div style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button onClick={() => setOutput(inboxAssistant.quickReply)} style={buttonStyle()}>
+            <button onClick={() => setOutput(inboxAssistant.quickReply)} style={primaryButtonStyle}>
               Use Quick Reply
             </button>
-            <button onClick={() => setOutput(inboxAssistant.followUp)} style={buttonStyle("secondary")}>
+            <button onClick={() => setOutput(inboxAssistant.followUp)} style={secondaryButtonStyle}>
               Use Follow-Up
             </button>
-            <button onClick={() => setOutput(`Suggested quote range: ${inboxAssistant.range}`)} style={buttonStyle("secondary")}>
+            <button
+              onClick={() => setOutput(`Suggested quote range: ${inboxAssistant.range}`)}
+              style={secondaryButtonStyle}
+            >
               Load Quote Range
             </button>
             {session && hasAccess(plan, "pro") && (
-              <button onClick={() => void addLead()} style={buttonStyle()}>
+              <button onClick={() => void addLead()} style={primaryButtonStyle}>
                 Save Lead
               </button>
             )}
@@ -1621,9 +1695,9 @@ ${result.offer}
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
                 placeholder="Customer Name"
-                style={{ ...inputBox(), flex: 1 }}
+                style={{ ...inputStyle, flex: 1 }}
               />
-              <button onClick={addCustomer} style={buttonStyle()}>
+              <button onClick={addCustomer} style={primaryButtonStyle}>
                 Add
               </button>
             </div>
@@ -1707,13 +1781,13 @@ ${result.offer}
             </select>
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <button onClick={translateFullOutput} style={buttonStyle()}>
+              <button onClick={translateFullOutput} style={primaryButtonStyle}>
                 Translate Full Output
               </button>
-              <button onClick={translateSelectedText} style={buttonStyle()}>
+              <button onClick={translateSelectedText} style={primaryButtonStyle}>
                 Translate Selected Text
               </button>
-              <button onClick={copyOutput} style={buttonStyle("secondary")}>
+              <button onClick={copyOutput} style={secondaryButtonStyle}>
                 Copy Output
               </button>
             </div>
@@ -1758,12 +1832,12 @@ ${result.offer}
             </div>
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <button onClick={replaceAllWithTranslatedPreview} style={buttonStyle()}>
+              <button onClick={replaceAllWithTranslatedPreview} style={primaryButtonStyle}>
                 Replace Output With Preview
               </button>
               <button
                 onClick={() => navigator.clipboard.writeText(translationPreview)}
-                style={buttonStyle("secondary")}
+                style={secondaryButtonStyle}
               >
                 Copy Preview
               </button>
@@ -1778,7 +1852,7 @@ ${result.offer}
             padding: 22,
             marginBottom: 24,
             boxShadow: "0 16px 40px rgba(10, 14, 30, 0.16)",
-            opacity: hasAccess(plan, "pro") ? 1 : 0.92,
+            opacity: hasAccess(plan, "pro") ? 1 : 0.96,
           }}
         >
           <h2 style={{ marginTop: 0 }}>Saved Lead Inbox (Pro+)</h2>
@@ -1795,8 +1869,7 @@ ${result.offer}
                 fontWeight: 700,
               }}
             >
-              Upgrade to Pro or Team to save leads, track pipeline status, and use the
-              inbox assistant as an operating system.
+              Upgrade to Pro or Team to save leads, track pipeline status, and use the inbox assistant as an operating system.
             </div>
           )}
 
@@ -1808,10 +1881,22 @@ ${result.offer}
               marginBottom: 16,
             }}
           >
-            <StatCard label="Total Leads" value={String(leadStats.total)} />
-            <StatCard label="Hot Leads" value={String(leadStats.hot)} />
-            <StatCard label="Quoted" value={String(leadStats.quoted)} />
-            <StatCard label="Won" value={String(leadStats.won)} />
+            <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 12, padding: 14 }}>
+              <div style={{ fontSize: 12, color: "#6b7280" }}>Total Leads</div>
+              <div style={{ fontSize: 22, fontWeight: 800 }}>{leadStats.total}</div>
+            </div>
+            <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 12, padding: 14 }}>
+              <div style={{ fontSize: 12, color: "#6b7280" }}>Hot Leads</div>
+              <div style={{ fontSize: 22, fontWeight: 800 }}>{leadStats.hot}</div>
+            </div>
+            <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 12, padding: 14 }}>
+              <div style={{ fontSize: 12, color: "#6b7280" }}>Quoted</div>
+              <div style={{ fontSize: 22, fontWeight: 800 }}>{leadStats.quoted}</div>
+            </div>
+            <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 12, padding: 14 }}>
+              <div style={{ fontSize: 12, color: "#6b7280" }}>Won</div>
+              <div style={{ fontSize: 22, fontWeight: 800 }}>{leadStats.won}</div>
+            </div>
           </div>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 18 }}>
@@ -1847,44 +1932,150 @@ ${result.offer}
             </select>
           </div>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr 1fr",
-              gap: 16,
-              alignItems: "start",
-            }}
-          >
-            <PipelineColumn
-              title={`Hot 🔥 (${hotLeads.length})`}
-              bg="#fff1f2"
-              leads={hotLeads}
-              onStatus={updateLeadStatus}
-              onDelete={deleteLead}
-              onLoadReply={setOutput}
-              laborRate={laborRateSetting}
-              markupPercent={markupSetting}
-            />
-            <PipelineColumn
-              title={`Warm (${warmLeads.length})`}
-              bg="#fffbeb"
-              leads={warmLeads}
-              onStatus={updateLeadStatus}
-              onDelete={deleteLead}
-              onLoadReply={setOutput}
-              laborRate={laborRateSetting}
-              markupPercent={markupSetting}
-            />
-            <PipelineColumn
-              title={`Cold (${coldLeads.length})`}
-              bg="#f8fafc"
-              leads={coldLeads}
-              onStatus={updateLeadStatus}
-              onDelete={deleteLead}
-              onLoadReply={setOutput}
-              laborRate={laborRateSetting}
-              markupPercent={markupSetting}
-            />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+            <div style={{ background: "#fff1f2", borderRadius: 12, padding: 14, border: "1px solid #e5e7eb" }}>
+              <div style={{ fontWeight: 800, marginBottom: 10 }}>{`Hot 🔥 (${hotLeads.length})`}</div>
+              {hotLeads.length === 0 && <div style={{ color: "#6b7280" }}>No leads</div>}
+              {hotLeads.map((lead) => (
+                <div
+                  key={lead.id}
+                  style={{
+                    border: "1px solid #e5e7eb",
+                    borderRadius: 12,
+                    padding: 12,
+                    background: "#fff",
+                    marginBottom: 12,
+                  }}
+                >
+                  <div style={{ fontWeight: 800 }}>{lead.title || "Untitled Lead"}</div>
+                  <div style={{ color: "#6b7280", fontSize: 13, marginBottom: 8 }}>
+                    {lead.city || "No city"} • {lead.created_at}
+                  </div>
+                  <div style={{ whiteSpace: "pre-wrap", marginBottom: 8 }}>{lead.description || "No description"}</div>
+                  <div style={{ fontSize: 14, lineHeight: 1.7 }}>
+                    <div>Status: <strong>{lead.status}</strong></div>
+                    <div>Score: <strong>{lead.score}</strong></div>
+                    <div>Contact: {lead.contact_name || "-"} / {lead.contact_info || "-"}</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+                    <button onClick={() => setOutput(buildContractorInboxAssistant({
+                      title: lead.title,
+                      description: lead.description,
+                      city: lead.city,
+                      contactName: lead.contact_name,
+                      contactInfo: lead.contact_info,
+                      budget: lead.budget,
+                    }, laborRateSetting, markupSetting).quickReply)} style={secondaryButtonStyle}>
+                      Load Reply
+                    </button>
+                    <button onClick={() => updateLeadStatus(lead.id, "quoted")} style={secondaryButtonStyle}>
+                      Quoted
+                    </button>
+                    <button onClick={() => updateLeadStatus(lead.id, "won")} style={secondaryButtonStyle}>
+                      Won
+                    </button>
+                    <button onClick={() => deleteLead(lead.id)} style={secondaryButtonStyle}>
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ background: "#fffbeb", borderRadius: 12, padding: 14, border: "1px solid #e5e7eb" }}>
+              <div style={{ fontWeight: 800, marginBottom: 10 }}>{`Warm (${warmLeads.length})`}</div>
+              {warmLeads.length === 0 && <div style={{ color: "#6b7280" }}>No leads</div>}
+              {warmLeads.map((lead) => (
+                <div
+                  key={lead.id}
+                  style={{
+                    border: "1px solid #e5e7eb",
+                    borderRadius: 12,
+                    padding: 12,
+                    background: "#fff",
+                    marginBottom: 12,
+                  }}
+                >
+                  <div style={{ fontWeight: 800 }}>{lead.title || "Untitled Lead"}</div>
+                  <div style={{ color: "#6b7280", fontSize: 13, marginBottom: 8 }}>
+                    {lead.city || "No city"} • {lead.created_at}
+                  </div>
+                  <div style={{ whiteSpace: "pre-wrap", marginBottom: 8 }}>{lead.description || "No description"}</div>
+                  <div style={{ fontSize: 14, lineHeight: 1.7 }}>
+                    <div>Status: <strong>{lead.status}</strong></div>
+                    <div>Score: <strong>{lead.score}</strong></div>
+                    <div>Contact: {lead.contact_name || "-"} / {lead.contact_info || "-"}</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+                    <button onClick={() => setOutput(buildContractorInboxAssistant({
+                      title: lead.title,
+                      description: lead.description,
+                      city: lead.city,
+                      contactName: lead.contact_name,
+                      contactInfo: lead.contact_info,
+                      budget: lead.budget,
+                    }, laborRateSetting, markupSetting).quickReply)} style={secondaryButtonStyle}>
+                      Load Reply
+                    </button>
+                    <button onClick={() => updateLeadStatus(lead.id, "contacted")} style={secondaryButtonStyle}>
+                      Contacted
+                    </button>
+                    <button onClick={() => updateLeadStatus(lead.id, "quoted")} style={secondaryButtonStyle}>
+                      Quoted
+                    </button>
+                    <button onClick={() => deleteLead(lead.id)} style={secondaryButtonStyle}>
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ background: "#f8fafc", borderRadius: 12, padding: 14, border: "1px solid #e5e7eb" }}>
+              <div style={{ fontWeight: 800, marginBottom: 10 }}>{`Cold (${coldLeads.length})`}</div>
+              {coldLeads.length === 0 && <div style={{ color: "#6b7280" }}>No leads</div>}
+              {coldLeads.map((lead) => (
+                <div
+                  key={lead.id}
+                  style={{
+                    border: "1px solid #e5e7eb",
+                    borderRadius: 12,
+                    padding: 12,
+                    background: "#fff",
+                    marginBottom: 12,
+                  }}
+                >
+                  <div style={{ fontWeight: 800 }}>{lead.title || "Untitled Lead"}</div>
+                  <div style={{ color: "#6b7280", fontSize: 13, marginBottom: 8 }}>
+                    {lead.city || "No city"} • {lead.created_at}
+                  </div>
+                  <div style={{ whiteSpace: "pre-wrap", marginBottom: 8 }}>{lead.description || "No description"}</div>
+                  <div style={{ fontSize: 14, lineHeight: 1.7 }}>
+                    <div>Status: <strong>{lead.status}</strong></div>
+                    <div>Score: <strong>{lead.score}</strong></div>
+                    <div>Contact: {lead.contact_name || "-"} / {lead.contact_info || "-"}</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+                    <button onClick={() => setOutput(buildContractorInboxAssistant({
+                      title: lead.title,
+                      description: lead.description,
+                      city: lead.city,
+                      contactName: lead.contact_name,
+                      contactInfo: lead.contact_info,
+                      budget: lead.budget,
+                    }, laborRateSetting, markupSetting).followUp)} style={secondaryButtonStyle}>
+                      Load Follow-Up
+                    </button>
+                    <button onClick={() => updateLeadStatus(lead.id, "contacted")} style={secondaryButtonStyle}>
+                      Contacted
+                    </button>
+                    <button onClick={() => deleteLead(lead.id)} style={secondaryButtonStyle}>
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -1895,7 +2086,7 @@ ${result.offer}
             padding: 22,
             marginBottom: 24,
             boxShadow: "0 16px 40px rgba(10, 14, 30, 0.16)",
-            opacity: hasAccess(plan, "pro") ? 1 : 0.92,
+            opacity: hasAccess(plan, "pro") ? 1 : 0.96,
           }}
         >
           <h2 style={{ marginTop: 0 }}>AI Marketing Generator (Pro+)</h2>
@@ -1928,17 +2119,15 @@ ${result.offer}
               value={marketingJob}
               onChange={(e) => setMarketingJob(e.target.value)}
               placeholder="Service type (example: gravel driveway)"
-              style={inputBox()}
+              style={inputStyle}
             />
-
             <input
               value={marketingCity}
               onChange={(e) => setMarketingCity(e.target.value)}
               placeholder="City"
-              style={inputBox()}
+              style={inputStyle}
             />
-
-            <button onClick={buildMarketing} style={buttonStyle()}>
+            <button onClick={buildMarketing} style={primaryButtonStyle}>
               Generate
             </button>
           </div>
