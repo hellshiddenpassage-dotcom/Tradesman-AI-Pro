@@ -544,24 +544,6 @@ function suggestedReply(
   return `Hi ${lead.contact_name || "there"} — thanks for reaching out about your ${jobType.toLowerCase()} project in ${lead.city || "your area"}. Based on what you sent, this looks like a rough range of ${range}. If you'd like, I can take a closer look and get you a firm quote.`;
 }
 
-function launchChecklist(): string {
-  return `SOFT LAUNCH CHECKLIST
-
-1. Verify all 3 Stripe links work
-2. Take screenshots of:
-   - Front Door Estimate Tool
-   - Lead Inbox
-   - Estimate Engine
-   - Marketing Generator
-3. Post one contractor offer today
-4. DM 20 contractors with screenshots
-5. Run one small Facebook test ad
-6. Ask first users what feature saves them the most time
-
-PITCH
-Tradesman AI helps contractors score leads, build estimates, reply faster, and generate ads in minutes.`;
-}
-
 function buttonStyle(type?: "secondary"): React.CSSProperties {
   if (type === "secondary") {
     return {
@@ -1339,7 +1321,7 @@ ${result.offer}
                 padding: 12,
               }}
             >
-              <strong>Best pitch:</strong> Type the job. Get a price instantly.
+              <strong>Live pricing:</strong> labor rate + markup are applied to every estimate.
             </div>
           </div>
         </div>
@@ -1402,31 +1384,6 @@ ${result.offer}
           <div style={{ marginTop: 12, color: "#6b7280" }}>{authMessage}</div>
         </div>
       )}
-
-      <div
-        style={{
-          border: "1px solid #e5e7eb",
-          borderRadius: 14,
-          padding: 20,
-          marginBottom: 24,
-          background: "#fafafa",
-        }}
-      >
-        <h2 style={{ marginTop: 0 }}>Launch-Ready Offer</h2>
-        <div style={{ lineHeight: 1.8 }}>
-          <div><strong>Headline:</strong> Tradesman AI helps contractors score leads, quote jobs, and market faster.</div>
-          <div><strong>Best entry offer:</strong> Basic at $19, Pro at $49, Team at $99.</div>
-          <div><strong>Best first niche:</strong> excavation, gravel driveway, skid steer, fencing, and dirt-work contractors.</div>
-        </div>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 14 }}>
-          <button onClick={() => setOutput(launchChecklist())} style={buttonStyle()}>
-            Load Launch Checklist
-          </button>
-          <button onClick={() => window.open(TEAM_STRIPE_LINK, "_blank")} style={buttonStyle("secondary")}>
-            Open Team Checkout
-          </button>
-        </div>
-      </div>
 
       <div
         style={{
