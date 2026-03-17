@@ -1,2152 +1,529 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { scoreLead, scoreBucket } from "./leadEngine";
-import { generateMarketing } from "./marketingEngine";
+import React, { useMemo, useState } from "react"; import { motion } from "framer-motion"; import { Wrench, Hammer, Building2, ClipboardList, Sparkles, Mail, Phone, User, CheckCircle2, ArrowRight, Calculator, Briefcase, BadgeDollarSign, MessageSquare, Search, Menu, X, Download, ShieldCheck, Star, FileText, Layers3, } from "lucide-react"; import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"; import { Button } from "@/components/ui/button"; import { Input } from "@/components/ui/input"; import { Textarea } from "@/components/ui/textarea"; import { Badge } from "@/components/ui/badge"; import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; import { Progress } from "@/components/ui/progress";
 
-type Language = "English" | "Spanish" | "French" | "German" | "Portuguese";
-type PlanTier = "basic" | "pro" | "team";
+const tradeTemplates = { General: [ { name: "Mobilization / Setup", qty: 1, unit: "job", rate: 150 }, { name: "Labor", qty: 8, unit: "hrs", rate: 95 }, { name: "Materials Allowance", qty: 1, unit: "lot", rate: 350 }, ], Concrete: [ { name: "Site Prep", qty: 4, unit: "hrs", rate: 105 }, { name: "Forming", qty: 6, unit: "hrs", rate: 95 }, { name: "Concrete Placement", qty: 4, unit: "yd", rate: 185 }, ], Electrical: [ { name: "Service Call / Diagnostics", qty: 1, unit: "job", rate: 125 }, { name: "Licensed Labor", qty: 6, unit: "hrs", rate: 120 }, { name: "Materials", qty: 1, unit: "lot", rate: 275 }, ], Plumbing: [ { name: "Trip Charge", qty: 1, unit: "job", rate: 95 }, { name: "Labor", qty: 5, unit: "hrs", rate: 115 }, { name: "Parts", qty: 1, unit: "lot", rate: 225 }, ], Earthwork: [ { name: "Equipment Time", qty: 6, unit: "hrs", rate: 165 }, { name: "Operator Labor", qty: 6, unit: "hrs", rate: 85 }, { name: "Haul / Disposal", qty: 1, unit: "lot", rate: 240 }, ], };
 
-type Customer = {
-  name: string;
-  created: string;
-};
+const fakeInbox = [ { id: 1, from: "Sarah Johnson", company: "Johnson Property Group", subject: "Need bid for retaining wall repair", priority: "High", summary: "Wants a fast quote this week for erosion and wall failure behind duplex.", }, { id: 2, from: "Mike Torres", company: "Homeowner", subject: "Concrete patio add-on question", priority: "Medium", summary: "Asked whether the patio can be extended and what timeline looks like.", }, { id: 3, from: "Alicia Reed", company: "Reed Retail LLC", subject: "Electrical estimate follow-up", priority: "Low", summary: "Needs a revised quote with alternate fixture pricing.", }, ];
 
-type LeadRow = {
-  id: string;
-  title: string;
-  description: string;
-  city: string;
-  source: string;
-  contact_name: string;
-  contact_info: string;
-  budget: string;
-  score: number;
-  status: string;
-  created_at: string;
-};
+const crmLeads = [ { name: "Front Range Rentals", value: "$8,600", status: "Estimate Sent" }, { name: "Dan Holloway", value: "$2,150", status: "Qualified" }, { name: "Mesa Storage", value: "$14,900", status: "Won" }, { name: "Apex Fitness", value: "$6,300", status: "Follow Up" }, ];
 
-type EstimateData = {
-  jobType: string;
-  laborHours: number;
-  laborRate: number;
-  laborCost: number;
-  materialsCost: number;
-  equipmentCost: number;
-  subtotal: number;
-  markupPercent: number;
-  markupAmount: number;
-  total: number;
-  scope: string;
-  recommendations: string[];
-};
+function currency(n: number) { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0, }).format(n); }
 
-declare global {
-  interface Window {
-    supabase: any;
-  }
-}
+function estimateAIRecommendations(trade: string, scope: string, budget: string) { const notes = [ Recommend clear scope wording for ${trade.toLowerCase()} work to reduce change-order disputes., "Add a materials allowance clause to protect margin from supplier fluctuations.", "Include schedule language, payment terms, and exclusions in the final estimate.", ];
 
-const BASIC_STRIPE_LINK = "https://buy.stripe.com/6oU3cocrv2Cb7BW7U1d7q06";
-const PRO_STRIPE_LINK = "https://buy.stripe.com/eVqdR21MRfoX3lGeipd7q07";
-const TEAM_STRIPE_LINK = "https://buy.stripe.com/3cI9AM77b2Cb2hCcahd7q08";
+if (scope.toLowerCase().includes("demo") || scope.toLowerCase().includes("remove")) { notes.push("Add debris hauling and disposal as a separate line item."); } if (budget) { notes.push(Customer mentioned target budget around ${budget}; consider a good / better / best option set.); } return notes; }
 
-const SUPABASE_URL = "https://ljizlaabarhyzocfcsba.supabase.co";
-const SUPABASE_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxqaXpsYWFiYXJoeXpvY2Zjc2JhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1ODcxNTIsImV4cCI6MjA4OTE2MzE1Mn0.eJstZOcLE_BALH1JMhju4zQonRxMQwk5DbEXpYUIKbw";
+export default function TradesmanAIStableBuild() { const [mobileMenuOpen, setMobileMenuOpen] = useState(false); const [activeTab, setActiveTab] = useState("dashboard"); const [signedIn, setSignedIn] = useState(true); const [plan] = useState("Starter"); const [freeEstimatesRemaining, setFreeEstimatesRemaining] = useState(3); const [trade, setTrade] = useState("General"); const [clientName, setClientName] = useState("John Carter"); const [projectName, setProjectName] = useState("Backyard retaining wall repair"); const [scope, setScope] = useState( "Repair failed retaining wall section, regrade affected area, haul debris, and restore drainage path." ); const [budget, setBudget] = useState("$8,000 - $12,000"); const [markup, setMarkup] = useState(18); const [search, setSearch] = useState(""); const [assistantPrompt, setAssistantPrompt] = useState( "Write a professional follow-up message for a customer who has not responded to an estimate in 5 days." );
 
-const LANGUAGES: Language[] = [
-  "English",
-  "Spanish",
-  "French",
-  "German",
-  "Portuguese",
-];
+const [lineItems, setLineItems] = useState(tradeTemplates.General);
 
-const languageLabels: Record<
-  Language,
-  {
-    estimateTitle: string;
-    estimateFor: string;
-    customer: string;
-    jobDescription: string;
-    detectedJobType: string;
-    scopeOfWork: string;
-    laborHours: string;
-    laborRate: string;
-    laborCost: string;
-    materialsCost: string;
-    equipmentCost: string;
-    subtotal: string;
-    markup: string;
-    totalEstimate: string;
-    recommendations: string;
-    generatedBy: string;
-    currencyNote: string;
-  }
-> = {
-  English: {
-    estimateTitle: "PROFESSIONAL ESTIMATE",
-    estimateFor: "Estimate For",
-    customer: "Customer",
-    jobDescription: "Job Description",
-    detectedJobType: "Detected Job Type",
-    scopeOfWork: "Scope of Work",
-    laborHours: "Estimated Labor Hours",
-    laborRate: "Labor Rate",
-    laborCost: "Labor Cost",
-    materialsCost: "Materials Cost",
-    equipmentCost: "Equipment Cost",
-    subtotal: "Subtotal",
-    markup: "Markup",
-    totalEstimate: "Total Estimate",
-    recommendations: "Recommendations",
-    generatedBy: "Generated by Tradesman AI",
-    currencyNote:
-      "All pricing is an estimate and should be reviewed before sending.",
-  },
-  Spanish: {
-    estimateTitle: "PRESUPUESTO PROFESIONAL",
-    estimateFor: "Presupuesto Para",
-    customer: "Cliente",
-    jobDescription: "Descripción del Trabajo",
-    detectedJobType: "Tipo de Trabajo Detectado",
-    scopeOfWork: "Alcance del Trabajo",
-    laborHours: "Horas de Mano de Obra Estimadas",
-    laborRate: "Tarifa de Mano de Obra",
-    laborCost: "Costo de Mano de Obra",
-    materialsCost: "Costo de Materiales",
-    equipmentCost: "Costo de Equipo",
-    subtotal: "Subtotal",
-    markup: "Margen",
-    totalEstimate: "Presupuesto Total",
-    recommendations: "Recomendaciones",
-    generatedBy: "Generado por Tradesman AI",
-    currencyNote:
-      "Todos los precios son estimados y deben revisarse antes de enviarlos.",
-  },
-  French: {
-    estimateTitle: "DEVIS PROFESSIONNEL",
-    estimateFor: "Devis Pour",
-    customer: "Client",
-    jobDescription: "Description du Travail",
-    detectedJobType: "Type de Travail Détecté",
-    scopeOfWork: "Étendue des Travaux",
-    laborHours: "Heures de Main-d'œuvre Estimées",
-    laborRate: "Taux de Main-d'œuvre",
-    laborCost: "Coût de Main-d'œuvre",
-    materialsCost: "Coût des Matériaux",
-    equipmentCost: "Coût de l'Équipement",
-    subtotal: "Sous-total",
-    markup: "Marge",
-    totalEstimate: "Devis Total",
-    recommendations: "Recommandations",
-    generatedBy: "Généré par Tradesman AI",
-    currencyNote:
-      "Tous les prix sont estimatifs et doivent être vérifiés avant envoi.",
-  },
-  German: {
-    estimateTitle: "PROFESSIONELLES ANGEBOT",
-    estimateFor: "Angebot Für",
-    customer: "Kunde",
-    jobDescription: "Arbeitsbeschreibung",
-    detectedJobType: "Erkannter Arbeitstyp",
-    scopeOfWork: "Leistungsumfang",
-    laborHours: "Geschätzte Arbeitsstunden",
-    laborRate: "Stundensatz",
-    laborCost: "Arbeitskosten",
-    materialsCost: "Materialkosten",
-    equipmentCost: "Gerätekosten",
-    subtotal: "Zwischensumme",
-    markup: "Aufschlag",
-    totalEstimate: "Gesamtangebot",
-    recommendations: "Empfehlungen",
-    generatedBy: "Erstellt von Tradesman AI",
-    currencyNote:
-      "Alle Preise sind Schätzungen und sollten vor dem Versand geprüft werden.",
-  },
-  Portuguese: {
-    estimateTitle: "ORÇAMENTO PROFISSIONAL",
-    estimateFor: "Orçamento Para",
-    customer: "Cliente",
-    jobDescription: "Descrição do Serviço",
-    detectedJobType: "Tipo de Serviço Detectado",
-    scopeOfWork: "Escopo do Trabalho",
-    laborHours: "Horas de Mão de Obra Estimadas",
-    laborRate: "Taxa de Mão de Obra",
-    laborCost: "Custo de Mão de Obra",
-    materialsCost: "Custo de Materiais",
-    equipmentCost: "Custo de Equipamento",
-    subtotal: "Subtotal",
-    markup: "Margem",
-    totalEstimate: "Orçamento Total",
-    recommendations: "Recomendações",
-    generatedBy: "Gerado por Tradesman AI",
-    currencyNote:
-      "Todos os preços são estimados e devem ser revisados antes do envio.",
-  },
-};
+const subtotal = useMemo( () => lineItems.reduce((sum, item) => sum + item.qty * item.rate, 0), [lineItems] ); const total = useMemo(() => subtotal * (1 + markup / 100), [subtotal, markup]);
 
-function money(value: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 2,
-  }).format(value);
-}
+const aiRecommendations = useMemo( () => estimateAIRecommendations(trade, scope, budget), [trade, scope, budget] );
 
-function getPlanRank(plan: PlanTier): number {
-  if (plan === "team") return 3;
-  if (plan === "pro") return 2;
-  return 1;
-}
+function switchTrade(nextTrade: keyof typeof tradeTemplates) { setTrade(nextTrade); setLineItems(tradeTemplates[nextTrade]); }
 
-function hasAccess(current: PlanTier, needed: PlanTier): boolean {
-  return getPlanRank(current) >= getPlanRank(needed);
-}
+function updateLineItem(index: number, field: string, value: string | number) { const updated = [...lineItems]; // @ts-ignore updated[index][field] = field === "name" || field === "unit" ? value : Number(value); setLineItems(updated); }
 
-function detectJobType(description: string): string {
-  const text = description.toLowerCase();
-  if (text.includes("fence")) return "Fence Work";
-  if (text.includes("gravel") || text.includes("road base")) return "Gravel / Base Work";
-  if (text.includes("driveway")) return "Driveway Work";
-  if (text.includes("pad")) return "Pad Prep";
-  if (text.includes("brush") || text.includes("clear")) return "Brush Clearing";
-  if (text.includes("concrete")) return "Concrete Work";
-  if (text.includes("demo") || text.includes("demolition") || text.includes("remove")) {
-    return "Demolition / Removal";
-  }
-  if (text.includes("excavat") || text.includes("dig") || text.includes("trench")) {
-    return "Excavation";
-  }
-  if (text.includes("alternator") || text.includes("repair") || text.includes("mechanic")) {
-    return "Mechanical Repair";
-  }
-  return "General Contract Work";
-}
+function addLineItem() { setLineItems([...lineItems, { name: "Custom Line Item", qty: 1, unit: "ea", rate: 100 }]); }
 
-function parseDimensionMultiplier(description: string): number {
-  const match = description.match(/(\d+)\s*x\s*(\d+)/i);
-  if (!match) return 1;
-  const a = Number(match[1]);
-  const b = Number(match[2]);
-  if (!Number.isFinite(a) || !Number.isFinite(b)) return 1;
-  const area = a * b;
-  if (area <= 400) return 1;
-  if (area <= 1200) return 1.35;
-  if (area <= 2500) return 1.75;
-  return 2.2;
-}
+function useFreeEstimate() { if (freeEstimatesRemaining > 0) setFreeEstimatesRemaining((prev) => prev - 1); }
 
-function generateEstimateData(
-  description: string,
-  customLaborRate?: number,
-  customMarkupPercent?: number
-): EstimateData {
-  const text = description.toLowerCase().trim();
-  const jobType = detectJobType(description);
-  const sizeMultiplier = parseDimensionMultiplier(description);
+const filteredInbox = fakeInbox.filter((m) => { const q = search.toLowerCase(); return !q || [m.from, m.company, m.subject, m.summary, m.priority].join(" ").toLowerCase().includes(q); });
 
-  let laborHours = 6;
-  let laborRate = customLaborRate ?? 95;
-  let materialsCost = 250;
-  let equipmentCost = 200;
-  const markupPercent = customMarkupPercent ?? 20;
-  let scope =
-    "Provide labor, tools, equipment, setup, cleanup, and standard job completion based on the described work.";
+const assistantOutput = Subject: Quick follow-up on your estimate\n\nHi ${clientName || "there"},\n\nI wanted to follow up on the estimate I sent over for ${projectName || "your project"}. Just checking to see if you had any questions, wanted any revisions, or if you'd like to get on the schedule.\n\nIf it helps, I can also provide an updated option based on your budget or timeline.\n\nThanks,\nTradesman AI User;
 
-  const recommendations: string[] = [];
+return ( <div className="min-h-screen bg-slate-950 text-white"> <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(249,115,22,0.2),transparent_25%),radial-gradient(circle_at_top_left,rgba(239,68,68,0.22),transparent_30%),linear-gradient(to_bottom,rgba(15,23,42,1),rgba(2,6,23,1))]" /> <div className="relative z-10"> <header className="sticky top-0 border-b border-white/10 bg-slate-950/75 backdrop-blur"> <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 md:px-6"> <div className="flex items-center gap-3"> <div className="rounded-2xl bg-gradient-to-br from-red-500 via-orange-500 to-amber-400 p-2 shadow-lg shadow-orange-500/20"> <Wrench className="h-5 w-5 text-white" /> </div> <div> <div className="text-lg font-bold tracking-wide">Tradesman AI</div> <div className="text-xs text-slate-300">Sales, estimates, and customer follow-up for contractors</div> </div> </div>
 
-  if (text.includes("gravel") || text.includes("road base")) {
-    laborHours = 10;
-    materialsCost = 1200;
-    equipmentCost = 550;
-    scope =
-      "Supply, spread, grade, and compact gravel or base material to the requested area.";
-    recommendations.push("Verify haul distance and material availability.");
-    recommendations.push("Confirm final grade and compaction requirements.");
-  }
+<nav className="hidden items-center gap-3 md:flex">
+          <Button variant="ghost" className="text-white hover:bg-white/10">Features</Button>
+          <Button variant="ghost" className="text-white hover:bg-white/10">Pricing</Button>
+          <Button variant="ghost" className="text-white hover:bg-white/10">Download</Button>
+          <Button className="rounded-2xl bg-gradient-to-r from-red-500 to-orange-500 text-white hover:opacity-90">
+            {signedIn ? "Open Workspace" : "Start Free"}
+          </Button>
+        </nav>
 
-  if (text.includes("driveway")) {
-    laborHours = 12;
-    materialsCost += 900;
-    equipmentCost += 400;
-    scope =
-      "Prepare driveway area, place material, grade surface, and leave site ready for use.";
-    recommendations.push("Measure actual driveway length and width before final quote.");
-  }
-
-  if (text.includes("pad")) {
-    laborHours = 14;
-    materialsCost += 1300;
-    equipmentCost += 500;
-    scope =
-      "Prepare pad area, grade, compact, and place material suitable for slab or structure support.";
-    recommendations.push("Check subgrade condition and drainage before final pricing.");
-  }
-
-  if (text.includes("fence")) {
-    laborHours = 16;
-    materialsCost = 1400;
-    equipmentCost = 180;
-    scope =
-      "Remove or install fence components, set posts, align runs, and complete standard fence work.";
-    recommendations.push("Verify footage, gate count, and post spacing.");
-  }
-
-  if (text.includes("brush") || text.includes("clear")) {
-    laborHours = 14;
-    materialsCost = 180;
-    equipmentCost = 750;
-    scope =
-      "Clear brush, vegetation, and light debris from the requested work area.";
-    recommendations.push("Confirm dump/disposal expectations and access conditions.");
-  }
-
-  if (text.includes("concrete")) {
-    laborHours = 18;
-    materialsCost += 2200;
-    equipmentCost += 650;
-    scope =
-      "Perform concrete-related removal, prep, placement, or finishing based on the described work.";
-    recommendations.push("Verify thickness, reinforcement, and finish type.");
-  }
-
-  if (text.includes("demo") || text.includes("demolition") || text.includes("remove")) {
-    laborHours += 8;
-    equipmentCost += 450;
-    materialsCost += 150;
-    recommendations.push("Confirm disposal fees and haul-off distance.");
-  }
-
-  if (text.includes("excavat") || text.includes("dig") || text.includes("trench")) {
-    laborHours += 10;
-    equipmentCost += 800;
-    materialsCost += 100;
-    scope =
-      "Excavate, shape, and clean the work area to the described dimensions and purpose.";
-    recommendations.push("Call utility locate before digging.");
-  }
-
-  if (text.includes("alternator") || text.includes("repair") || text.includes("mechanic")) {
-    laborHours = 4;
-    laborRate = customLaborRate ?? 110;
-    materialsCost = 380;
-    equipmentCost = 60;
-    scope =
-      "Diagnose, remove, replace, test, and verify proper operation for the described repair.";
-    recommendations.push("Confirm exact part number before ordering.");
-  }
-
-  laborHours = Math.round(laborHours * sizeMultiplier);
-  materialsCost = Math.round(materialsCost * sizeMultiplier);
-  equipmentCost = Math.round(equipmentCost * Math.min(sizeMultiplier, 1.8));
-
-  const laborCost = laborHours * laborRate;
-  const subtotal = laborCost + materialsCost + equipmentCost;
-  const markupAmount = Math.round(subtotal * (markupPercent / 100));
-  const total = subtotal + markupAmount;
-
-  if (recommendations.length === 0) {
-    recommendations.push("Verify final measurements on site.");
-    recommendations.push("Confirm material pricing before sending.");
-  }
-
-  return {
-    jobType,
-    laborHours,
-    laborRate,
-    laborCost,
-    materialsCost,
-    equipmentCost,
-    subtotal,
-    markupPercent,
-    markupAmount,
-    total,
-    scope,
-    recommendations,
-  };
-}
-
-function formatEstimate(
-  data: EstimateData,
-  customerName: string,
-  description: string,
-  language: Language
-): string {
-  const t = languageLabels[language];
-
-  return `${t.estimateTitle}
-
-${t.estimateFor}: ${customerName || "Walk-in / Unassigned"}
-
-${t.customer}: ${customerName || "Not specified"}
-${t.jobDescription}: ${description}
-${t.detectedJobType}: ${data.jobType}
-
-${t.scopeOfWork}:
-${data.scope}
-
-${t.laborHours}: ${data.laborHours}
-${t.laborRate}: ${money(data.laborRate)}
-${t.laborCost}: ${money(data.laborCost)}
-${t.materialsCost}: ${money(data.materialsCost)}
-${t.equipmentCost}: ${money(data.equipmentCost)}
-${t.subtotal}: ${money(data.subtotal)}
-${t.markup}: ${data.markupPercent}% (${money(data.markupAmount)})
-
-${t.totalEstimate}: ${money(data.total)}
-
-${t.recommendations}:
-- ${data.recommendations.join("\n- ")}
-
-${t.generatedBy}
-${t.currencyNote}`;
-}
-
-function translateText(text: string, language: Language): string {
-  if (language === "English") return text;
-
-  const replacements: Record<Language, Array<[string, string]>> = {
-    English: [],
-    Spanish: [
-      ["PROFESSIONAL ESTIMATE", "PRESUPUESTO PROFESIONAL"],
-      ["Estimate For", "Presupuesto Para"],
-      ["Customer", "Cliente"],
-      ["Job Description", "Descripción del Trabajo"],
-      ["Detected Job Type", "Tipo de Trabajo Detectado"],
-      ["Scope of Work", "Alcance del Trabajo"],
-      ["Estimated Labor Hours", "Horas de Mano de Obra Estimadas"],
-      ["Labor Rate", "Tarifa de Mano de Obra"],
-      ["Labor Cost", "Costo de Mano de Obra"],
-      ["Materials Cost", "Costo de Materiales"],
-      ["Equipment Cost", "Costo de Equipo"],
-      ["Subtotal", "Subtotal"],
-      ["Markup", "Margen"],
-      ["Total Estimate", "Presupuesto Total"],
-      ["Recommendations", "Recomendaciones"],
-      ["Generated by Tradesman AI", "Generado por Tradesman AI"],
-      ["Not specified", "No especificado"],
-      ["Walk-in / Unassigned", "Cliente sin asignar"],
-    ],
-    French: [
-      ["PROFESSIONAL ESTIMATE", "DEVIS PROFESSIONNEL"],
-      ["Estimate For", "Devis Pour"],
-      ["Customer", "Client"],
-      ["Job Description", "Description du Travail"],
-      ["Detected Job Type", "Type de Travail Détecté"],
-      ["Scope of Work", "Étendue des Travaux"],
-      ["Estimated Labor Hours", "Heures de Main-d'œuvre Estimées"],
-      ["Labor Rate", "Taux de Main-d'œuvre"],
-      ["Labor Cost", "Coût de Main-d'œuvre"],
-      ["Materials Cost", "Coût des Matériaux"],
-      ["Equipment Cost", "Coût de l'Équipement"],
-      ["Subtotal", "Sous-total"],
-      ["Markup", "Marge"],
-      ["Total Estimate", "Devis Total"],
-      ["Recommendations", "Recommandations"],
-      ["Generated by Tradesman AI", "Généré par Tradesman AI"],
-      ["Not specified", "Non spécifié"],
-      ["Walk-in / Unassigned", "Client non attribué"],
-    ],
-    German: [
-      ["PROFESSIONAL ESTIMATE", "PROFESSIONELLES ANGEBOT"],
-      ["Estimate For", "Angebot Für"],
-      ["Customer", "Kunde"],
-      ["Job Description", "Arbeitsbeschreibung"],
-      ["Detected Job Type", "Erkannter Arbeitstyp"],
-      ["Scope of Work", "Leistungsumfang"],
-      ["Estimated Labor Hours", "Geschätzte Arbeitsstunden"],
-      ["Labor Rate", "Stundensatz"],
-      ["Labor Cost", "Arbeitskosten"],
-      ["Materials Cost", "Materialkosten"],
-      ["Equipment Cost", "Gerätekosten"],
-      ["Subtotal", "Zwischensumme"],
-      ["Markup", "Aufschlag"],
-      ["Total Estimate", "Gesamtangebot"],
-      ["Recommendations", "Empfehlungen"],
-      ["Generated by Tradesman AI", "Erstellt von Tradesman AI"],
-      ["Not specified", "Nicht angegeben"],
-      ["Walk-in / Unassigned", "Nicht zugeordnet"],
-    ],
-    Portuguese: [
-      ["PROFESSIONAL ESTIMATE", "ORÇAMENTO PROFISSIONAL"],
-      ["Estimate For", "Orçamento Para"],
-      ["Customer", "Cliente"],
-      ["Job Description", "Descrição do Serviço"],
-      ["Detected Job Type", "Tipo de Serviço Detectado"],
-      ["Scope of Work", "Escopo do Trabalho"],
-      ["Estimated Labor Hours", "Horas de Mão de Obra Estimadas"],
-      ["Labor Rate", "Taxa de Mão de Obra"],
-      ["Labor Cost", "Custo de Mão de Obra"],
-      ["Materials Cost", "Custo de Materiais"],
-      ["Equipment Cost", "Custo de Equipamento"],
-      ["Subtotal", "Subtotal"],
-      ["Markup", "Margem"],
-      ["Total Estimate", "Orçamento Total"],
-      ["Recommendations", "Recomendações"],
-      ["Generated by Tradesman AI", "Gerado por Tradesman AI"],
-      ["Not specified", "Não especificado"],
-      ["Walk-in / Unassigned", "Cliente não atribuído"],
-    ],
-  };
-
-  let result = text;
-  for (const [from, to] of replacements[language]) {
-    result = result.split(from).join(to);
-  }
-  return result;
-}
-
-function quoteRangeFromLead(
-  description: string,
-  score: number,
-  laborRate?: number,
-  markupPercent?: number
-): string {
-  const estimate = generateEstimateData(
-    description || "General contractor job",
-    laborRate,
-    markupPercent
-  );
-
-  let low = Math.round(estimate.total * 0.85);
-  let high = Math.round(estimate.total * 1.2);
-
-  if (detectJobType(description) === "Mechanical Repair") {
-    low = Math.round(estimate.total * 0.9);
-    high = Math.round(estimate.total * 1.1);
-  }
-
-  if (score >= 70) {
-    low = Math.round(low * 1.05);
-    high = Math.round(high * 1.1);
-  }
-
-  return `${money(low)} - ${money(high)}`;
-}
-
-function buildContractorInboxAssistant(
-  lead: {
-    title: string;
-    description: string;
-    city: string;
-    contactName: string;
-    contactInfo: string;
-    budget: string;
-  },
-  laborRate: number,
-  markupPercent: number
-) {
-  const combined = `${lead.title}\n${lead.description}\n${lead.city}\n${lead.budget}\n${lead.contactName}\n${lead.contactInfo}`;
-  const scored = scoreLead(combined);
-  const bucket = scoreBucket(scored.score);
-  const jobType = detectJobType(`${lead.title} ${lead.description}`);
-  const range = quoteRangeFromLead(
-    `${lead.title}\n${lead.description}`,
-    scored.score,
-    laborRate,
-    markupPercent
-  );
-
-  const quickReply = `Hi ${lead.contactName || "there"} — thanks for reaching out about your ${jobType.toLowerCase()} project${lead.city ? ` in ${lead.city}` : ""}. Based on what you sent, this looks like a rough range of ${range}. If you'd like, I can take a closer look and get you a firm quote.`;
-
-  const followUp = `Hi ${lead.contactName || "there"} — just following up on your ${jobType.toLowerCase()} project${lead.city ? ` in ${lead.city}` : ""}. I can get this moving for you and help dial in the exact scope and final quote. Let me know if you'd like me to put together the next step.`;
-
-  const closeAngle =
-    bucket === "Hot"
-      ? "Lead looks strong. Fast response is the priority."
-      : bucket === "Warm"
-      ? "Lead has potential. Clarify timeline, access, and exact scope."
-      : "Lower intent lead. Keep reply short and qualify the project fast.";
-
-  return {
-    score: scored.score,
-    bucket,
-    reasons: scored.reasons,
-    jobType,
-    range,
-    quickReply,
-    followUp,
-    closeAngle,
-  };
-}
-
-export default function App() {
-  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-  const [session, setSession] = useState<any>(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
-  const [authEmail, setAuthEmail] = useState("");
-  const [authPassword, setAuthPassword] = useState("");
-  const [authMessage, setAuthMessage] = useState("");
-
-  const [plan, setPlan] = useState<PlanTier>("basic");
-
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [customerName, setCustomerName] = useState("");
-  const [selectedCustomer, setSelectedCustomer] = useState("");
-
-  const [jobDescription, setJobDescription] = useState("");
-  const [language, setLanguage] = useState<Language>("English");
-  const [translateLanguage, setTranslateLanguage] = useState<Language>("Spanish");
-  const [output, setOutput] = useState("");
-  const [translationPreview, setTranslationPreview] = useState("");
-  const [selectedText, setSelectedText] = useState("");
-
-  const [leadTitle, setLeadTitle] = useState("");
-  const [leadDescription, setLeadDescription] = useState("");
-  const [leadCity, setLeadCity] = useState("");
-  const [leadContactName, setLeadContactName] = useState("");
-  const [leadContactInfo, setLeadContactInfo] = useState("");
-  const [leadBudget, setLeadBudget] = useState("");
-  const [leads, setLeads] = useState<LeadRow[]>([]);
-  const [leadStatusFilter, setLeadStatusFilter] = useState("all");
-  const [leadBucketFilter, setLeadBucketFilter] = useState("all");
-
-  const [marketingJob, setMarketingJob] = useState("");
-  const [marketingCity, setMarketingCity] = useState("");
-  const [marketingOutput, setMarketingOutput] = useState("");
-
-  const [companyName, setCompanyName] = useState(
-    () => localStorage.getItem("companyName") || ""
-  );
-  const [laborRateSetting, setLaborRateSetting] = useState<number>(() => {
-    const stored = localStorage.getItem("laborRateSetting");
-    return stored ? Number(stored) : 95;
-  });
-  const [markupSetting, setMarkupSetting] = useState<number>(() => {
-    const stored = localStorage.getItem("markupSetting");
-    return stored ? Number(stored) : 20;
-  });
-  const [freeEstimateUses, setFreeEstimateUses] = useState<number>(() => {
-    const stored = localStorage.getItem("freeEstimateUses");
-    return stored ? Number(stored) : 0;
-  });
-
-  const outputRef = useRef<HTMLTextAreaElement | null>(null);
-
-  const primaryButtonStyle = {
-    background: "#6366f1",
-    color: "#fff",
-    border: "none",
-    borderRadius: 12,
-    padding: "11px 16px",
-    cursor: "pointer",
-    fontWeight: 800,
-  };
-
-  const secondaryButtonStyle = {
-    background: "#fff",
-    color: "#111827",
-    border: "1px solid #d1d5db",
-    borderRadius: 12,
-    padding: "11px 16px",
-    cursor: "pointer",
-    fontWeight: 800,
-  };
-
-  const inputStyle = {
-    width: "100%",
-    padding: 12,
-    borderRadius: 12,
-    border: "1px solid #d1d5db",
-    boxSizing: "border-box" as const,
-  };
-
-  useEffect(() => {
-    localStorage.setItem("companyName", companyName);
-  }, [companyName]);
-
-  useEffect(() => {
-    localStorage.setItem("laborRateSetting", String(laborRateSetting));
-  }, [laborRateSetting]);
-
-  useEffect(() => {
-    localStorage.setItem("markupSetting", String(markupSetting));
-  }, [markupSetting]);
-
-  useEffect(() => {
-    localStorage.setItem("freeEstimateUses", String(freeEstimateUses));
-  }, [freeEstimateUses]);
-
-  useEffect(() => {
-    let mounted = true;
-
-    supabase.auth.getSession().then((result: any) => {
-      if (!mounted) return;
-      setSession(result?.data?.session ?? null);
-      setAuthLoading(false);
-    });
-
-    const authListener = supabase.auth.onAuthStateChange(
-      (_event: any, nextSession: any) => {
-        setSession(nextSession);
-        setAuthLoading(false);
-      }
-    );
-
-    return () => {
-      mounted = false;
-      authListener?.data?.subscription?.unsubscribe?.();
-    };
-  }, [supabase.auth]);
-
-  useEffect(() => {
-    if (session?.user?.id) {
-      void loadLeads(session.user.id);
-    } else {
-      setLeads([]);
-    }
-  }, [session]);
-
-  async function loadLeads(userId: string) {
-    const result = await supabase
-      .from("leads")
-      .select("*")
-      .eq("user_id", userId)
-      .order("score", { ascending: false })
-      .order("created_at", { ascending: false });
-
-    if (!result.error) {
-      const mapped = (result.data || []).map((row: any) => ({
-        ...row,
-        created_at: row.created_at
-          ? new Date(row.created_at).toLocaleString()
-          : "",
-      }));
-      setLeads(mapped);
-    }
-  }
-
-  async function handleSignUp() {
-    setAuthMessage("");
-    if (!authEmail || !authPassword) {
-      setAuthMessage("Enter email and password.");
-      return;
-    }
-
-    const result = await supabase.auth.signUp({
-      email: authEmail,
-      password: authPassword,
-      options: {
-        emailRedirectTo: window.location.origin,
-      },
-    });
-
-    if (result.error) {
-      setAuthMessage(result.error.message);
-      return;
-    }
-
-    setAuthMessage("Account created. Check your email if confirmation is required.");
-  }
-
-  async function handleSignIn() {
-    setAuthMessage("");
-    if (!authEmail || !authPassword) {
-      setAuthMessage("Enter email and password.");
-      return;
-    }
-
-    const result = await supabase.auth.signInWithPassword({
-      email: authEmail,
-      password: authPassword,
-    });
-
-    if (result.error) {
-      setAuthMessage(result.error.message);
-      return;
-    }
-
-    setAuthMessage("Signed in.");
-  }
-
-  async function handleSignOut() {
-    await supabase.auth.signOut();
-    setAuthMessage("");
-  }
-
-  async function addLead() {
-    if (!session?.user?.id) {
-      alert("Sign in first.");
-      return;
-    }
-
-    if (!hasAccess(plan, "pro")) {
-      alert("Lead Inbox is a Pro or Team feature.");
-      return;
-    }
-
-    const combined = `${leadTitle}\n${leadDescription}\n${leadCity}\n${leadBudget}\n${leadContactName}\n${leadContactInfo}`;
-    const scored = scoreLead(combined);
-
-    const result = await supabase.from("leads").insert({
-      user_id: session.user.id,
-      source: "manual",
-      title: leadTitle,
-      description: leadDescription,
-      city: leadCity,
-      contact_name: leadContactName,
-      contact_info: leadContactInfo,
-      budget: leadBudget,
-      score: scored.score,
-      status: "new",
-    });
-
-    if (result.error) {
-      alert(result.error.message);
-      return;
-    }
-
-    setLeadTitle("");
-    setLeadDescription("");
-    setLeadCity("");
-    setLeadContactName("");
-    setLeadContactInfo("");
-    setLeadBudget("");
-
-    await loadLeads(session.user.id);
-  }
-
-  async function updateLeadStatus(id: string, status: string) {
-    if (!session?.user?.id) return;
-
-    const result = await supabase.from("leads").update({ status }).eq("id", id);
-    if (result.error) {
-      alert(result.error.message);
-      return;
-    }
-
-    await loadLeads(session.user.id);
-  }
-
-  async function deleteLead(id: string) {
-    if (!session?.user?.id) return;
-
-    const result = await supabase.from("leads").delete().eq("id", id);
-    if (result.error) {
-      alert(result.error.message);
-      return;
-    }
-
-    await loadLeads(session.user.id);
-  }
-
-  function buildMarketing() {
-    if (!hasAccess(plan, "pro")) {
-      alert("AI Marketing Generator is a Pro or Team feature.");
-      return;
-    }
-
-    const result = generateMarketing(marketingJob, marketingCity);
-
-    const text = `MARKETING CONTENT
-
-HOOK
-${result.hook}
-
-FACEBOOK AD
-${result.facebookAd}
-
-GOOGLE AD
-${result.googleAd}
-
-SOCIAL POST
-${result.socialPost}
-
-SPECIAL OFFER
-${result.offer}
-`;
-
-    setMarketingOutput(text);
-  }
-
-  function generateFrontDoorEstimate() {
-    if (!session && freeEstimateUses >= 3) {
-      setOutput(
-        "You have used your 3 free estimates. Upgrade to continue with unlimited estimates, lead tools, and AI marketing."
-      );
-      return;
-    }
-
-    const estimate = generateEstimateData(
-      jobDescription || "General contractor job",
-      laborRateSetting,
-      markupSetting
-    );
-
-    const customerLabel = companyName || selectedCustomer || "Walk-in / Unassigned";
-    const text = formatEstimate(
-      estimate,
-      customerLabel,
-      jobDescription || "General contractor job",
-      language
-    );
-
-    setOutput(text);
-    setTranslationPreview("");
-
-    if (!session) {
-      setFreeEstimateUses((prev) => prev + 1);
-    }
-  }
-
-  const liveEstimate = useMemo(() => {
-    return generateEstimateData(
-      jobDescription || "General contractor job",
-      laborRateSetting,
-      markupSetting
-    );
-  }, [jobDescription, laborRateSetting, markupSetting]);
-
-  const inboxAssistant = useMemo(() => {
-    return buildContractorInboxAssistant(
-      {
-        title: leadTitle,
-        description: leadDescription,
-        city: leadCity,
-        contactName: leadContactName,
-        contactInfo: leadContactInfo,
-        budget: leadBudget,
-      },
-      laborRateSetting,
-      markupSetting
-    );
-  }, [
-    leadTitle,
-    leadDescription,
-    leadCity,
-    leadContactName,
-    leadContactInfo,
-    leadBudget,
-    laborRateSetting,
-    markupSetting,
-  ]);
-
-  const filteredLeads = useMemo(() => {
-    return leads.filter((lead) => {
-      const statusPass =
-        leadStatusFilter === "all" ? true : lead.status === leadStatusFilter;
-      const bucketPass =
-        leadBucketFilter === "all"
-          ? true
-          : scoreBucket(Number(lead.score || 0)) === leadBucketFilter;
-      return statusPass && bucketPass;
-    });
-  }, [leads, leadStatusFilter, leadBucketFilter]);
-
-  const hotLeads = useMemo(
-    () => filteredLeads.filter((lead) => scoreBucket(Number(lead.score || 0)) === "Hot"),
-    [filteredLeads]
-  );
-  const warmLeads = useMemo(
-    () => filteredLeads.filter((lead) => scoreBucket(Number(lead.score || 0)) === "Warm"),
-    [filteredLeads]
-  );
-  const coldLeads = useMemo(
-    () => filteredLeads.filter((lead) => scoreBucket(Number(lead.score || 0)) === "Cold"),
-    [filteredLeads]
-  );
-
-  const leadStats = useMemo(() => {
-    return {
-      total: leads.length,
-      hot: leads.filter((l) => scoreBucket(Number(l.score || 0)) === "Hot").length,
-      quoted: leads.filter((l) => l.status === "quoted").length,
-      won: leads.filter((l) => l.status === "won").length,
-    };
-  }, [leads]);
-
-  const addCustomer = () => {
-    if (!customerName.trim()) return;
-    setCustomers((prev) => [
-      ...prev,
-      {
-        name: customerName.trim(),
-        created: new Date().toLocaleDateString(),
-      },
-    ]);
-    setCustomerName("");
-  };
-
-  const copyOutput = async () => {
-    await navigator.clipboard.writeText(output);
-  };
-
-  const translateFullOutput = () => {
-    if (!output.trim()) return;
-    const translated = translateText(output, translateLanguage);
-    setOutput(translated);
-    setTranslationPreview(translated);
-  };
-
-  const handleSelection = () => {
-    const textarea = outputRef.current;
-    if (!textarea) return;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const text = textarea.value.substring(start, end);
-    setSelectedText(text);
-  };
-
-  const translateSelectedText = () => {
-    const textarea = outputRef.current;
-    if (!textarea) return;
-    if (!selectedText.trim()) return;
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const translatedSelection = translateText(selectedText, translateLanguage);
-
-    const newOutput =
-      output.substring(0, start) + translatedSelection + output.substring(end);
-
-    setOutput(newOutput);
-    setTranslationPreview(translatedSelection);
-  };
-
-  const replaceAllWithTranslatedPreview = () => {
-    if (!translationPreview.trim()) return;
-    setOutput(translationPreview);
-  };
-
-  if (authLoading) {
-    return <div style={{ padding: 32, color: "white" }}>Loading...</div>;
-  }
-
-  return (
-    <div
-      style={{
-        minHeight: "100vh",
-        fontFamily: "Arial, sans-serif",
-        background:
-          "radial-gradient(circle at top left, rgba(99,102,241,0.22), transparent 28%), radial-gradient(circle at top right, rgba(236,72,153,0.18), transparent 24%), linear-gradient(180deg, #0b1020 0%, #121a2f 100%)",
-        color: "#111827",
-      }}
-    >
-      <div style={{ maxWidth: 1220, margin: "0 auto", padding: 28 }}>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1.15fr 0.85fr",
-            gap: 20,
-            marginBottom: 24,
-          }}
+        <Button
+          variant="ghost"
+          className="md:hidden text-white hover:bg-white/10"
+          onClick={() => setMobileMenuOpen((prev) => !prev)}
         >
-          <div
-            style={{
-              background:
-                "linear-gradient(135deg, rgba(79,70,229,0.95), rgba(168,85,247,0.92), rgba(236,72,153,0.86))",
-              borderRadius: 24,
-              padding: 28,
-              color: "white",
-              boxShadow: "0 20px 60px rgba(10, 14, 30, 0.35)",
-            }}
-          >
-            <div
-              style={{
-                display: "inline-block",
-                padding: "8px 12px",
-                borderRadius: 999,
-                background: "rgba(255,255,255,0.15)",
-                fontWeight: 800,
-                marginBottom: 16,
-              }}
-            >
-              Instant Estimates + Contractor Inbox Assistant
-            </div>
+          {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        </Button>
+      </div>
 
-            <h1 style={{ fontSize: 44, lineHeight: 1.05, margin: "0 0 14px" }}>
-              Close more jobs faster.
-            </h1>
-
-            <p
-              style={{
-                fontSize: 18,
-                lineHeight: 1.7,
-                margin: 0,
-                color: "rgba(255,255,255,0.92)",
-              }}
-            >
-              Generate professional estimates in seconds, score incoming leads,
-              write quick replies, follow up faster, and turn slow quote flow into
-              a real closing system.
-            </p>
-
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
-              <div
-                style={{
-                  padding: "10px 12px",
-                  borderRadius: 999,
-                  background: "rgba(99,102,241,0.16)",
-                  border: "1px solid rgba(99,102,241,0.35)",
-                  color: "#e5e7eb",
-                  fontSize: 13,
-                  fontWeight: 700,
-                }}
-              >
-                Instant estimate generator
-              </div>
-              <div
-                style={{
-                  padding: "10px 12px",
-                  borderRadius: 999,
-                  background: "rgba(244,114,182,0.15)",
-                  border: "1px solid rgba(244,114,182,0.35)",
-                  color: "#e5e7eb",
-                  fontSize: 13,
-                  fontWeight: 700,
-                }}
-              >
-                Contractor inbox assistant
-              </div>
-              <div
-                style={{
-                  padding: "10px 12px",
-                  borderRadius: 999,
-                  background: "rgba(251,191,36,0.16)",
-                  border: "1px solid rgba(251,191,36,0.35)",
-                  color: "#e5e7eb",
-                  fontSize: 13,
-                  fontWeight: 700,
-                }}
-              >
-                AI marketing tools
-              </div>
-            </div>
-          </div>
-
-          <div
-            style={{
-              background: "rgba(255,255,255,0.94)",
-              borderRadius: 24,
-              padding: 22,
-              boxShadow: "0 20px 60px rgba(10, 14, 30, 0.22)",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-              <div>
-                <div style={{ fontWeight: 900, fontSize: 26 }}>Tradesman AI</div>
-                <div style={{ color: "#4b5563", marginTop: 4 }}>
-                  {session?.user?.email
-                    ? `Signed in as ${session.user.email} • ${plan.toUpperCase()}`
-                    : `3 free public estimates before upgrade`}
-                </div>
-              </div>
-
-              {session ? (
-                <button onClick={handleSignOut} style={secondaryButtonStyle}>
-                  Sign Out
-                </button>
-              ) : null}
-            </div>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(3, 1fr)",
-                gap: 12,
-                marginTop: 18,
-              }}
-            >
-              <div
-                style={{
-                  border: "1px solid #e5e7eb",
-                  borderRadius: 12,
-                  padding: 16,
-                  background: "#ffffff",
-                }}
-              >
-                <div style={{ fontWeight: 800, fontSize: 18 }}>Basic</div>
-                <div style={{ fontSize: 24, fontWeight: 800, margin: "8px 0 12px" }}>$19/mo</div>
-                <ul style={{ paddingLeft: 18, marginBottom: 12 }}>
-                  <li>Unlimited estimates</li>
-                  <li>Company pricing settings</li>
-                  <li>Translation tools</li>
-                  <li>Core workflow</li>
-                </ul>
-                <button
-                  onClick={() => window.open(BASIC_STRIPE_LINK, "_blank")}
-                  style={primaryButtonStyle}
-                >
-                  Choose Basic
-                </button>
-              </div>
-
-              <div
-                style={{
-                  border: "2px solid #6366f1",
-                  borderRadius: 12,
-                  padding: 16,
-                  background: "#eef2ff",
-                }}
-              >
-                <div style={{ fontWeight: 800, fontSize: 18 }}>Pro</div>
-                <div style={{ fontSize: 24, fontWeight: 800, margin: "8px 0 12px" }}>$49/mo</div>
-                <ul style={{ paddingLeft: 18, marginBottom: 12 }}>
-                  <li>Everything in Basic</li>
-                  <li>Lead inbox</li>
-                  <li>AI replies</li>
-                  <li>Marketing generator</li>
-                </ul>
-                <button
-                  onClick={() => window.open(PRO_STRIPE_LINK, "_blank")}
-                  style={primaryButtonStyle}
-                >
-                  Choose Pro
-                </button>
-              </div>
-
-              <div
-                style={{
-                  border: "1px solid #e5e7eb",
-                  borderRadius: 12,
-                  padding: 16,
-                  background: "#ffffff",
-                }}
-              >
-                <div style={{ fontWeight: 800, fontSize: 18 }}>Team</div>
-                <div style={{ fontSize: 24, fontWeight: 800, margin: "8px 0 12px" }}>$99/mo</div>
-                <ul style={{ paddingLeft: 18, marginBottom: 12 }}>
-                  <li>Everything in Pro</li>
-                  <li>Shared office use</li>
-                  <li>Team positioning</li>
-                  <li>Priority support</li>
-                </ul>
-                <button
-                  onClick={() => window.open(TEAM_STRIPE_LINK, "_blank")}
-                  style={primaryButtonStyle}
-                >
-                  Choose Team
-                </button>
-              </div>
-            </div>
-
-            {!session && (
-              <div
-                style={{
-                  marginTop: 16,
-                  padding: 14,
-                  borderRadius: 14,
-                  background: "#eef2ff",
-                  border: "1px solid #c7d2fe",
-                  fontWeight: 700,
-                  color: "#3730a3",
-                }}
-              >
-                Free estimates used: {freeEstimateUses} / 3
-              </div>
-            )}
+      {mobileMenuOpen && (
+        <div className="border-t border-white/10 px-4 py-4 md:hidden">
+          <div className="flex flex-col gap-2">
+            <Button variant="ghost" className="justify-start text-white hover:bg-white/10">Features</Button>
+            <Button variant="ghost" className="justify-start text-white hover:bg-white/10">Pricing</Button>
+            <Button variant="ghost" className="justify-start text-white hover:bg-white/10">Download</Button>
+            <Button className="justify-start rounded-2xl bg-gradient-to-r from-red-500 to-orange-500 text-white hover:opacity-90">
+              {signedIn ? "Open Workspace" : "Start Free"}
+            </Button>
           </div>
         </div>
+      )}
+    </header>
 
-        {!session && (
-          <div
-            style={{
-              background: "rgba(255,255,255,0.95)",
-              borderRadius: 20,
-              padding: 22,
-              marginBottom: 24,
-              boxShadow: "0 16px 40px rgba(10, 14, 30, 0.16)",
-            }}
-          >
-            <h2 style={{ marginTop: 0 }}>
-              {authMode === "signin" ? "Sign In" : "Create Account"}
-            </h2>
-
-            <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
-              <button
-                onClick={() => setAuthMode("signin")}
-                style={authMode === "signin" ? primaryButtonStyle : secondaryButtonStyle}
-              >
-                Sign In
-              </button>
-              <button
-                onClick={() => setAuthMode("signup")}
-                style={authMode === "signup" ? primaryButtonStyle : secondaryButtonStyle}
-              >
-                Sign Up
-              </button>
-            </div>
-
-            <div style={{ display: "grid", gap: 12, maxWidth: 480 }}>
-              <input
-                type="email"
-                placeholder="Email"
-                value={authEmail}
-                onChange={(e) => setAuthEmail(e.target.value)}
-                style={inputStyle}
-              />
-              <input
-                type="password"
-                placeholder="Password"
-                value={authPassword}
-                onChange={(e) => setAuthPassword(e.target.value)}
-                style={inputStyle}
-              />
-              {authMode === "signin" ? (
-                <button onClick={handleSignIn} style={primaryButtonStyle}>
-                  Sign In
-                </button>
-              ) : (
-                <button onClick={handleSignUp} style={primaryButtonStyle}>
-                  Create Account
-                </button>
-              )}
-            </div>
-
-            <div style={{ marginTop: 12, color: "#6b7280" }}>{authMessage}</div>
-          </div>
-        )}
-
-        {session && (
-          <div
-            style={{
-              background: "rgba(255,255,255,0.95)",
-              borderRadius: 20,
-              padding: 18,
-              marginBottom: 24,
-              boxShadow: "0 16px 40px rgba(10, 14, 30, 0.16)",
-            }}
-          >
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <button onClick={() => setPlan("basic")} style={secondaryButtonStyle}>
-                Set Basic
-              </button>
-              <button onClick={() => setPlan("pro")} style={secondaryButtonStyle}>
-                Set Pro
-              </button>
-              <button onClick={() => setPlan("team")} style={secondaryButtonStyle}>
-                Set Team
-              </button>
-            </div>
-          </div>
-        )}
-
-        <div
-          style={{
-            background: "rgba(255,255,255,0.96)",
-            borderRadius: 20,
-            padding: 22,
-            marginBottom: 24,
-            boxShadow: "0 16px 40px rgba(10, 14, 30, 0.16)",
-          }}
+    <main className="mx-auto max-w-7xl px-4 py-8 md:px-6 md:py-10">
+      <section className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45 }}
+          className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl shadow-black/30 backdrop-blur"
         >
-          <h2 style={{ marginTop: 0 }}>Instant Estimate Tool</h2>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr 1fr",
-              gap: 12,
-              marginBottom: 14,
-            }}
-          >
-            <input
-              value={companyName}
-              onChange={(e) => setCompanyName(e.target.value)}
-              placeholder="Company Name"
-              style={inputStyle}
-            />
-            <input
-              type="number"
-              value={laborRateSetting}
-              onChange={(e) => setLaborRateSetting(Number(e.target.value))}
-              placeholder="Labor Rate"
-              style={inputStyle}
-            />
-            <input
-              type="number"
-              value={markupSetting}
-              onChange={(e) => setMarkupSetting(Number(e.target.value))}
-              placeholder="Markup %"
-              style={inputStyle}
-            />
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1.3fr 0.35fr 0.35fr",
-              gap: 12,
-              marginBottom: 14,
-            }}
-          >
-            <textarea
-              value={jobDescription}
-              onChange={(e) => setJobDescription(e.target.value)}
-              placeholder="Type the job in plain English. Example: gravel driveway 200x40 with grading and base material"
-              style={{
-                minHeight: 120,
-                padding: 12,
-                borderRadius: 12,
-                border: "1px solid #d1d5db",
-                resize: "vertical",
-              }}
-            />
-            <select
-              value={language}
-              onChange={(e) => setLanguage(e.target.value as Language)}
-              style={{
-                padding: 12,
-                borderRadius: 12,
-                border: "1px solid #d1d5db",
-                height: 48,
-              }}
-            >
-              {LANGUAGES.map((lang) => (
-                <option key={lang} value={lang}>
-                  {lang}
-                </option>
-              ))}
-            </select>
-            <button onClick={generateFrontDoorEstimate} style={primaryButtonStyle}>
-              Generate Estimate
-            </button>
-          </div>
-
-          {!session && freeEstimateUses >= 3 && (
-            <div
-              style={{
-                background: "#fff7ed",
-                border: "1px solid #fdba74",
-                borderRadius: 12,
-                padding: 12,
-                marginBottom: 14,
-                color: "#9a3412",
-                fontWeight: 700,
-              }}
-            >
-              You used your 3 free estimates. Upgrade to continue with unlimited estimates, lead tools, and AI marketing.
-            </div>
-          )}
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: 16,
-            }}
-          >
-            <div
-              style={{
-                background: "linear-gradient(180deg, #eff6ff 0%, #f8fafc 100%)",
-                border: "1px solid #dbeafe",
-                borderRadius: 16,
-                padding: 16,
-              }}
-            >
-              <strong>Live Estimate Snapshot</strong>
-              <div style={{ marginTop: 10, lineHeight: 1.85 }}>
-                <div>Job Type: {liveEstimate.jobType}</div>
-                <div>Labor Hours: {liveEstimate.laborHours}</div>
-                <div>Labor Rate: {money(liveEstimate.laborRate)}</div>
-                <div>Labor Cost: {money(liveEstimate.laborCost)}</div>
-                <div>Materials Cost: {money(liveEstimate.materialsCost)}</div>
-                <div>Equipment Cost: {money(liveEstimate.equipmentCost)}</div>
-                <div>Markup: {liveEstimate.markupPercent}%</div>
-                <div><strong>Total: {money(liveEstimate.total)}</strong></div>
-              </div>
-            </div>
-
-            <div
-              style={{
-                background: "linear-gradient(180deg, #faf5ff 0%, #f8fafc 100%)",
-                border: "1px solid #e9d5ff",
-                borderRadius: 16,
-                padding: 16,
-              }}
-            >
-              <strong>What this becomes</strong>
-              <div style={{ marginTop: 10, lineHeight: 1.85, color: "#374151" }}>
-                <div>• instant estimate for the customer</div>
-                <div>• faster first response</div>
-                <div>• cleaner quote flow</div>
-                <div>• upsell into inbox assistant and marketing</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div
-          style={{
-            background: "rgba(255,255,255,0.96)",
-            borderRadius: 20,
-            padding: 22,
-            marginBottom: 24,
-            boxShadow: "0 16px 40px rgba(10, 14, 30, 0.16)",
-            opacity: hasAccess(plan, "pro") ? 1 : 0.96,
-          }}
-        >
-          <h2 style={{ marginTop: 0 }}>Contractor Inbox Assistant</h2>
-          <p style={{ color: "#4b5563", marginTop: -2 }}>
-            Score the lead, generate the quote range, build the first reply, and tee up the follow-up.
+          <Badge className="mb-4 rounded-full bg-orange-500/20 px-3 py-1 text-orange-200 hover:bg-orange-500/20">
+            Built for contractors, trades, and service businesses
+          </Badge>
+          <h1 className="max-w-3xl text-4xl font-black leading-tight md:text-6xl">
+            Quote jobs faster. Follow up automatically. Win more work.
+          </h1>
+          <p className="mt-4 max-w-2xl text-base text-slate-300 md:text-lg">
+            A lively contractor-first workspace with homeowner lead capture, 3 free AI-powered estimates,
+            estimate generation, customer follow-up, and inbox assistance in one clean build.
           </p>
 
-          {!hasAccess(plan, "pro") && (
-            <div
-              style={{
-                background: "#fff7ed",
-                border: "1px solid #fdba74",
-                borderRadius: 12,
-                padding: 12,
-                marginBottom: 14,
-                color: "#9a3412",
-                fontWeight: 700,
-              }}
-            >
-              Pro or Team unlocks the full lead inbox workflow and saved leads.
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Button className="rounded-2xl bg-gradient-to-r from-red-500 to-orange-500 px-5 text-white hover:opacity-90">
+              Start with 3 Free Estimates <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+            <Button variant="outline" className="rounded-2xl border-white/15 bg-white/5 text-white hover:bg-white/10">
+              <Download className="mr-2 h-4 w-4" /> Downloadable PWA Ready
+            </Button>
+          </div>
+
+          <div className="mt-8 grid gap-4 md:grid-cols-3">
+            {[
+              { icon: ClipboardList, title: "3 Free AI Estimates", desc: "Let every new user experience the value before paying." },
+              { icon: MessageSquare, title: "AI Assistant", desc: "Write follow-ups, revisions, and customer messages in seconds." },
+              { icon: Mail, title: "Inbox Assistant", desc: "Sort leads, summarize requests, and prioritize hot opportunities." },
+            ].map((item, idx) => (
+              <Card key={idx} className="rounded-3xl border-white/10 bg-slate-900/70 text-white">
+                <CardContent className="p-5">
+                  <item.icon className="mb-3 h-8 w-8 text-orange-400" />
+                  <div className="font-semibold">{item.title}</div>
+                  <div className="mt-1 text-sm text-slate-300">{item.desc}</div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.55 }}
+          className="grid gap-4"
+        >
+          <Card className="rounded-3xl border-white/10 bg-slate-900/80 text-white">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-xl">
+                <ShieldCheck className="h-5 w-5 text-green-400" /> MVP Status
+              </CardTitle>
+              <CardDescription className="text-slate-300">
+                Stable sales-first build that can be shown to contractors now.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <div className="mb-2 flex items-center justify-between text-sm text-slate-300">
+                  <span>Core product completion</span>
+                  <span>82%</span>
+                </div>
+                <Progress value={82} />
+              </div>
+              <div className="grid gap-3 text-sm text-slate-200">
+                {[
+                  "Landing page and contractor value proposition",
+                  "3 free estimate usage model",
+                  "Estimate builder workspace",
+                  "AI follow-up assistant",
+                  "Inbox assistant demo workflow",
+                  "Downloadable PWA positioning",
+                ].map((item) => (
+                  <div key={item} className="flex items-start gap-2">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 text-green-400" />
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="rounded-3xl border-white/10 bg-gradient-to-br from-red-500/15 via-orange-500/10 to-slate-900 text-white">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm text-slate-300">Current plan</div>
+                  <div className="text-2xl font-bold">{plan}</div>
+                </div>
+                <Badge className="rounded-full bg-green-500/20 text-green-200 hover:bg-green-500/20">
+                  Live Demo State
+                </Badge>
+              </div>
+              <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">
+                <div className="text-sm text-slate-300">Free estimates remaining</div>
+                <div className="mt-1 text-4xl font-black text-orange-300">{freeEstimatesRemaining}</div>
+                <div className="mt-2 text-sm text-slate-300">
+                  Includes AI assistant access during free estimate usage.
+                </div>
+                <Button
+                  onClick={useFreeEstimate}
+                  disabled={freeEstimatesRemaining === 0}
+                  className="mt-4 rounded-2xl bg-gradient-to-r from-red-500 to-orange-500 text-white hover:opacity-90 disabled:opacity-50"
+                >
+                  Use 1 Free Estimate
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </section>
+
+      <section className="mt-8 grid gap-6 xl:grid-cols-[260px_1fr]">
+        <Card className="rounded-3xl border-white/10 bg-slate-900/80 text-white h-fit">
+          <CardContent className="p-4">
+            <div className="mb-4 flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3">
+              <div className="rounded-2xl bg-orange-500/20 p-2">
+                <User className="h-5 w-5 text-orange-300" />
+              </div>
+              <div>
+                <div className="font-semibold">Contractor Workspace</div>
+                <div className="text-xs text-slate-400">Single build / demo-ready</div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {[
+                ["dashboard", Briefcase, "Dashboard"],
+                ["estimate", Calculator, "Estimate Builder"],
+                ["assistant", Sparkles, "AI Assistant"],
+                ["inbox", Mail, "Inbox Assistant"],
+                ["leads", Layers3, "Leads"],
+              ].map(([value, Icon, label]) => (
+                <Button
+                  key={String(value)}
+                  variant="ghost"
+                  onClick={() => setActiveTab(String(value))}
+                  className={`w-full justify-start rounded-2xl text-white hover:bg-white/10 ${
+                    activeTab === value ? "bg-white/10" : ""
+                  }`}
+                >
+                  <Icon className="mr-2 h-4 w-4 text-orange-300" />
+                  {label}
+                </Button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="space-y-6">
+          {activeTab === "dashboard" && (
+            <div className="grid gap-6">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                {[
+                  { label: "This Month's Quotes", value: "18", icon: FileText },
+                  { label: "Close Rate", value: "31%", icon: BadgeDollarSign },
+                  { label: "Active Leads", value: "27", icon: Building2 },
+                  { label: "Assistant Actions", value: "54", icon: Sparkles },
+                ].map((item) => (
+                  <Card key={item.label} className="rounded-3xl border-white/10 bg-slate-900/80 text-white">
+                    <CardContent className="p-5">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-sm text-slate-400">{item.label}</div>
+                          <div className="mt-2 text-3xl font-black">{item.value}</div>
+                        </div>
+                        <div className="rounded-2xl bg-orange-500/15 p-3">
+                          <item.icon className="h-5 w-5 text-orange-300" />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              <div className="grid gap-6 lg:grid-cols-2">
+                <Card className="rounded-3xl border-white/10 bg-slate-900/80 text-white">
+                  <CardHeader>
+                    <CardTitle>What makes this sellable now</CardTitle>
+                  </CardHeader>
+                  <CardContent className="grid gap-3 text-sm text-slate-300">
+                    {[
+                      "Clear painkiller: faster estimates and faster follow-up for contractors.",
+                      "Built-in free usage model: 3 free AI-assisted estimates before upgrade.",
+                      "Looks modern enough to demo locally without being embarrassed by bland UI.",
+                      "Expandable into subscriptions, CRM, invoices, and full customer comms later.",
+                    ].map((item) => (
+                      <div key={item} className="flex gap-2"><Star className="mt-0.5 h-4 w-4 text-orange-300" />{item}</div>
+                    ))}
+                  </CardContent>
+                </Card>
+
+                <Card className="rounded-3xl border-white/10 bg-slate-900/80 text-white">
+                  <CardHeader>
+                    <CardTitle>What still gets added later</CardTitle>
+                  </CardHeader>
+                  <CardContent className="grid gap-3 text-sm text-slate-300">
+                    {[
+                      "Real authentication and database",
+                      "Stripe subscription and usage tracking",
+                      "PDF estimate export and branded proposals",
+                      "Real email / SMS delivery",
+                      "Full contractor inbox integrations",
+                    ].map((item) => (
+                      <div key={item} className="flex gap-2"><Hammer className="mt-0.5 h-4 w-4 text-red-300" />{item}</div>
+                    ))}
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           )}
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: 12,
-              marginBottom: 12,
-            }}
-          >
-            <input
-              value={leadTitle}
-              onChange={(e) => setLeadTitle(e.target.value)}
-              placeholder="Lead title"
-              style={inputStyle}
-            />
-            <input
-              value={leadCity}
-              onChange={(e) => setLeadCity(e.target.value)}
-              placeholder="City"
-              style={inputStyle}
-            />
-          </div>
-
-          <textarea
-            value={leadDescription}
-            onChange={(e) => setLeadDescription(e.target.value)}
-            placeholder="Paste the incoming lead or job request here."
-            style={{
-              width: "100%",
-              minHeight: 120,
-              padding: 12,
-              borderRadius: 12,
-              border: "1px solid #d1d5db",
-              resize: "vertical",
-              boxSizing: "border-box",
-              marginBottom: 12,
-            }}
-          />
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr 1fr",
-              gap: 12,
-              marginBottom: 14,
-            }}
-          >
-            <input
-              value={leadContactName}
-              onChange={(e) => setLeadContactName(e.target.value)}
-              placeholder="Contact name"
-              style={inputStyle}
-            />
-            <input
-              value={leadContactInfo}
-              onChange={(e) => setLeadContactInfo(e.target.value)}
-              placeholder="Phone or email"
-              style={inputStyle}
-            />
-            <input
-              value={leadBudget}
-              onChange={(e) => setLeadBudget(e.target.value)}
-              placeholder="Budget"
-              style={inputStyle}
-            />
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(4, 1fr)",
-              gap: 12,
-              marginBottom: 16,
-            }}
-          >
-            <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 12, padding: 14 }}>
-              <div style={{ fontSize: 12, color: "#6b7280" }}>Lead Score</div>
-              <div style={{ fontSize: 22, fontWeight: 800 }}>{inboxAssistant.score}</div>
-            </div>
-            <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 12, padding: 14 }}>
-              <div style={{ fontSize: 12, color: "#6b7280" }}>Heat Bucket</div>
-              <div style={{ fontSize: 22, fontWeight: 800 }}>{inboxAssistant.bucket}</div>
-            </div>
-            <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 12, padding: 14 }}>
-              <div style={{ fontSize: 12, color: "#6b7280" }}>Job Type</div>
-              <div style={{ fontSize: 22, fontWeight: 800 }}>{inboxAssistant.jobType}</div>
-            </div>
-            <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 12, padding: 14 }}>
-              <div style={{ fontSize: 12, color: "#6b7280" }}>Quote Range</div>
-              <div style={{ fontSize: 22, fontWeight: 800 }}>{inboxAssistant.range}</div>
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr 1fr",
-              gap: 16,
-            }}
-          >
-            <div
-              style={{
-                border: "1px solid #e5e7eb",
-                borderRadius: 16,
-                padding: 16,
-                background: "#f8fafc",
-              }}
-            >
-              <div style={{ fontWeight: 800, marginBottom: 8 }}>Quick Reply</div>
-              <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.7 }}>
-                {inboxAssistant.quickReply}
-              </div>
-              <div style={{ marginTop: 12 }}>
-                <button onClick={() => setOutput(inboxAssistant.quickReply)} style={secondaryButtonStyle}>
-                  Load Reply
-                </button>
-              </div>
-            </div>
-
-            <div
-              style={{
-                border: "1px solid #e5e7eb",
-                borderRadius: 16,
-                padding: 16,
-                background: "#f8fafc",
-              }}
-            >
-              <div style={{ fontWeight: 800, marginBottom: 8 }}>Follow-Up</div>
-              <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.7 }}>
-                {inboxAssistant.followUp}
-              </div>
-              <div style={{ marginTop: 12 }}>
-                <button onClick={() => setOutput(inboxAssistant.followUp)} style={secondaryButtonStyle}>
-                  Load Follow-Up
-                </button>
-              </div>
-            </div>
-
-            <div
-              style={{
-                border: "1px solid #e5e7eb",
-                borderRadius: 16,
-                padding: 16,
-                background: "#f8fafc",
-              }}
-            >
-              <div style={{ fontWeight: 800, marginBottom: 8 }}>Close Angle</div>
-              <div style={{ lineHeight: 1.7, marginBottom: 10 }}>
-                {inboxAssistant.closeAngle}
-              </div>
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>Why it scored this way</div>
-              <div style={{ lineHeight: 1.7 }}>
-                {inboxAssistant.reasons.length
-                  ? inboxAssistant.reasons.join(" • ")
-                  : "No strong signals found yet."}
-              </div>
-            </div>
-          </div>
-
-          <div style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button onClick={() => setOutput(inboxAssistant.quickReply)} style={primaryButtonStyle}>
-              Use Quick Reply
-            </button>
-            <button onClick={() => setOutput(inboxAssistant.followUp)} style={secondaryButtonStyle}>
-              Use Follow-Up
-            </button>
-            <button
-              onClick={() => setOutput(`Suggested quote range: ${inboxAssistant.range}`)}
-              style={secondaryButtonStyle}
-            >
-              Load Quote Range
-            </button>
-            {session && hasAccess(plan, "pro") && (
-              <button onClick={() => void addLead()} style={primaryButtonStyle}>
-                Save Lead
-              </button>
-            )}
-          </div>
-        </div>
-
-        {session && (
-          <div
-            style={{
-              background: "rgba(255,255,255,0.96)",
-              borderRadius: 20,
-              padding: 22,
-              marginBottom: 24,
-              boxShadow: "0 16px 40px rgba(10, 14, 30, 0.16)",
-            }}
-          >
-            <h2 style={{ marginTop: 0 }}>Customer Manager</h2>
-
-            <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
-              <input
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                placeholder="Customer Name"
-                style={{ ...inputStyle, flex: 1 }}
-              />
-              <button onClick={addCustomer} style={primaryButtonStyle}>
-                Add
-              </button>
-            </div>
-
-            <select
-              value={selectedCustomer}
-              onChange={(e) => setSelectedCustomer(e.target.value)}
-              style={{
-                width: "100%",
-                padding: 12,
-                borderRadius: 12,
-                border: "1px solid #d1d5db",
-                marginBottom: 16,
-              }}
-            >
-              <option value="">Select Customer</option>
-              {customers.map((c, i) => (
-                <option key={`${c.name}-${i}`} value={c.name}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-
-            <div style={{ maxHeight: 220, overflowY: "auto" }}>
-              {customers.length === 0 ? (
-                <div style={{ color: "#6b7280" }}>No customers yet.</div>
-              ) : (
-                customers.map((c, i) => (
-                  <div
-                    key={`${c.name}-${i}`}
-                    style={{
-                      padding: "10px 0",
-                      borderBottom: "1px solid #f1f5f9",
-                    }}
-                  >
-                    <strong>{c.name}</strong>
-                    <div style={{ fontSize: 12, color: "#6b7280" }}>
-                      Added {c.created}
+          {activeTab === "estimate" && (
+            <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+              <Card className="rounded-3xl border-white/10 bg-slate-900/80 text-white">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Calculator className="h-5 w-5 text-orange-300" /> Estimate Builder
+                  </CardTitle>
+                  <CardDescription className="text-slate-300">
+                    AI-guided estimate workflow with editable line items and markup.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div>
+                      <label className="mb-2 block text-sm text-slate-300">Trade</label>
+                      <div className="flex flex-wrap gap-2">
+                        {Object.keys(tradeTemplates).map((t) => (
+                          <Button
+                            key={t}
+                            variant="outline"
+                            onClick={() => switchTrade(t as keyof typeof tradeTemplates)}
+                            className={`rounded-2xl border-white/10 text-white hover:bg-white/10 ${trade === t ? "bg-white/10" : "bg-white/5"}`}
+                          >
+                            {t}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-sm text-slate-300">Target markup %</label>
+                      <Input
+                        type="number"
+                        value={markup}
+                        onChange={(e) => setMarkup(Number(e.target.value || 0))}
+                        className="rounded-2xl border-white/10 bg-white/5 text-white"
+                      />
                     </div>
                   </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
 
-        <div
-          style={{
-            background: "rgba(255,255,255,0.96)",
-            borderRadius: 20,
-            padding: 22,
-            marginBottom: 24,
-            boxShadow: "0 16px 40px rgba(10, 14, 30, 0.16)",
-          }}
-        >
-          <h2 style={{ marginTop: 0 }}>Language + Output Tools</h2>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div>
+                      <label className="mb-2 block text-sm text-slate-300">Client name</label>
+                      <Input value={clientName} onChange={(e) => setClientName(e.target.value)} className="rounded-2xl border-white/10 bg-white/5 text-white" />
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-sm text-slate-300">Project name</label>
+                      <Input value={projectName} onChange={(e) => setProjectName(e.target.value)} className="rounded-2xl border-white/10 bg-white/5 text-white" />
+                    </div>
+                  </div>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "0.4fr 1fr",
-              gap: 12,
-              alignItems: "center",
-              marginBottom: 12,
-            }}
-          >
-            <select
-              value={translateLanguage}
-              onChange={(e) => setTranslateLanguage(e.target.value as Language)}
-              style={{
-                padding: 12,
-                borderRadius: 12,
-                border: "1px solid #d1d5db",
-              }}
-            >
-              {LANGUAGES.map((lang) => (
-                <option key={lang} value={lang}>
-                  Translate to {lang}
-                </option>
-              ))}
-            </select>
+                  <div>
+                    <label className="mb-2 block text-sm text-slate-300">Scope of work</label>
+                    <Textarea value={scope} onChange={(e) => setScope(e.target.value)} className="min-h-[110px] rounded-2xl border-white/10 bg-white/5 text-white" />
+                  </div>
 
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <button onClick={translateFullOutput} style={primaryButtonStyle}>
-                Translate Full Output
-              </button>
-              <button onClick={translateSelectedText} style={primaryButtonStyle}>
-                Translate Selected Text
-              </button>
-              <button onClick={copyOutput} style={secondaryButtonStyle}>
-                Copy Output
-              </button>
-            </div>
-          </div>
+                  <div>
+                    <label className="mb-2 block text-sm text-slate-300">Budget note</label>
+                    <Input value={budget} onChange={(e) => setBudget(e.target.value)} className="rounded-2xl border-white/10 bg-white/5 text-white" />
+                  </div>
 
-          <textarea
-            ref={outputRef}
-            value={output}
-            onChange={(e) => setOutput(e.target.value)}
-            onSelect={handleSelection}
-            placeholder="Generated estimate, quick reply, follow-up, or translated output will appear here..."
-            style={{
-              width: "100%",
-              minHeight: 320,
-              padding: 14,
-              borderRadius: 12,
-              border: "1px solid #d1d5db",
-              resize: "vertical",
-              boxSizing: "border-box",
-              marginBottom: 14,
-            }}
-          />
+                  <div className="rounded-3xl border border-white/10 bg-black/20 p-4">
+                    <div className="mb-3 flex items-center justify-between">
+                      <div className="font-semibold">Line Items</div>
+                      <Button onClick={addLineItem} className="rounded-2xl bg-orange-500 text-white hover:bg-orange-500/90">Add Item</Button>
+                    </div>
+                    <div className="space-y-3">
+                      {lineItems.map((item, index) => (
+                        <div key={index} className="grid gap-2 rounded-2xl border border-white/10 bg-white/5 p-3 md:grid-cols-[1.5fr_0.6fr_0.6fr_0.8fr]">
+                          <Input value={item.name} onChange={(e) => updateLineItem(index, "name", e.target.value)} className="rounded-xl border-white/10 bg-slate-950/70 text-white" />
+                          <Input value={item.qty} type="number" onChange={(e) => updateLineItem(index, "qty", e.target.value)} className="rounded-xl border-white/10 bg-slate-950/70 text-white" />
+                          <Input value={item.unit} onChange={(e) => updateLineItem(index, "unit", e.target.value)} className="rounded-xl border-white/10 bg-slate-950/70 text-white" />
+                          <Input value={item.rate} type="number" onChange={(e) => updateLineItem(index, "rate", e.target.value)} className="rounded-xl border-white/10 bg-slate-950/70 text-white" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
-          <div
-            style={{
-              background: "#f8fafc",
-              border: "1px solid #e5e7eb",
-              borderRadius: 12,
-              padding: 14,
-            }}
-          >
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>Translation Preview</div>
-            <div
-              style={{
-                minHeight: 80,
-                whiteSpace: "pre-wrap",
-                color: translationPreview ? "#111827" : "#6b7280",
-                marginBottom: 12,
-              }}
-            >
-              {translationPreview || "Translated text preview will appear here."}
-            </div>
+              <div className="space-y-6">
+                <Card className="rounded-3xl border-white/10 bg-slate-900/80 text-white">
+                  <CardHeader>
+                    <CardTitle>Estimate Summary</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex items-center justify-between text-slate-300"><span>Subtotal</span><span>{currency(subtotal)}</span></div>
+                    <div className="flex items-center justify-between text-slate-300"><span>Markup ({markup}%)</span><span>{currency(total - subtotal)}</span></div>
+                    <div className="flex items-center justify-between border-t border-white/10 pt-3 text-xl font-bold"><span>Total</span><span>{currency(total)}</span></div>
+                    <div className="rounded-2xl bg-green-500/10 p-3 text-sm text-green-200">
+                      Great starter quote for demo purposes. Next step is branded PDF export.
+                    </div>
+                  </CardContent>
+                </Card>
 
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <button onClick={replaceAllWithTranslatedPreview} style={primaryButtonStyle}>
-                Replace Output With Preview
-              </button>
-              <button
-                onClick={() => navigator.clipboard.writeText(translationPreview)}
-                style={secondaryButtonStyle}
-              >
-                Copy Preview
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div
-          style={{
-            background: "rgba(255,255,255,0.96)",
-            borderRadius: 20,
-            padding: 22,
-            marginBottom: 24,
-            boxShadow: "0 16px 40px rgba(10, 14, 30, 0.16)",
-            opacity: hasAccess(plan, "pro") ? 1 : 0.96,
-          }}
-        >
-          <h2 style={{ marginTop: 0 }}>Saved Lead Inbox (Pro+)</h2>
-
-          {!hasAccess(plan, "pro") && (
-            <div
-              style={{
-                background: "#fff7ed",
-                border: "1px solid #fdba74",
-                borderRadius: 12,
-                padding: 12,
-                marginBottom: 14,
-                color: "#9a3412",
-                fontWeight: 700,
-              }}
-            >
-              Upgrade to Pro or Team to save leads, track pipeline status, and use the inbox assistant as an operating system.
+                <Card className="rounded-3xl border-white/10 bg-slate-900/80 text-white">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Sparkles className="h-5 w-5 text-orange-300" /> AI Recommendations
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3 text-sm text-slate-300">
+                    {aiRecommendations.map((tip) => (
+                      <div key={tip} className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                        {tip}
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           )}
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(4, 1fr)",
-              gap: 12,
-              marginBottom: 16,
-            }}
-          >
-            <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 12, padding: 14 }}>
-              <div style={{ fontSize: 12, color: "#6b7280" }}>Total Leads</div>
-              <div style={{ fontSize: 22, fontWeight: 800 }}>{leadStats.total}</div>
-            </div>
-            <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 12, padding: 14 }}>
-              <div style={{ fontSize: 12, color: "#6b7280" }}>Hot Leads</div>
-              <div style={{ fontSize: 22, fontWeight: 800 }}>{leadStats.hot}</div>
-            </div>
-            <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 12, padding: 14 }}>
-              <div style={{ fontSize: 12, color: "#6b7280" }}>Quoted</div>
-              <div style={{ fontSize: 22, fontWeight: 800 }}>{leadStats.quoted}</div>
-            </div>
-            <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 12, padding: 14 }}>
-              <div style={{ fontSize: 12, color: "#6b7280" }}>Won</div>
-              <div style={{ fontSize: 22, fontWeight: 800 }}>{leadStats.won}</div>
-            </div>
-          </div>
-
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 18 }}>
-            <select
-              value={leadStatusFilter}
-              onChange={(e) => setLeadStatusFilter(e.target.value)}
-              style={{
-                padding: 12,
-                borderRadius: 10,
-                border: "1px solid #d1d5db",
-              }}
-            >
-              <option value="all">All statuses</option>
-              <option value="new">New</option>
-              <option value="contacted">Contacted</option>
-              <option value="quoted">Quoted</option>
-              <option value="won">Won</option>
-            </select>
-
-            <select
-              value={leadBucketFilter}
-              onChange={(e) => setLeadBucketFilter(e.target.value)}
-              style={{
-                padding: 12,
-                borderRadius: 10,
-                border: "1px solid #d1d5db",
-              }}
-            >
-              <option value="all">All buckets</option>
-              <option value="Hot">Hot</option>
-              <option value="Warm">Warm</option>
-              <option value="Cold">Cold</option>
-            </select>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
-            <div style={{ background: "#fff1f2", borderRadius: 12, padding: 14, border: "1px solid #e5e7eb" }}>
-              <div style={{ fontWeight: 800, marginBottom: 10 }}>{`Hot 🔥 (${hotLeads.length})`}</div>
-              {hotLeads.length === 0 && <div style={{ color: "#6b7280" }}>No leads</div>}
-              {hotLeads.map((lead) => (
-                <div
-                  key={lead.id}
-                  style={{
-                    border: "1px solid #e5e7eb",
-                    borderRadius: 12,
-                    padding: 12,
-                    background: "#fff",
-                    marginBottom: 12,
-                  }}
-                >
-                  <div style={{ fontWeight: 800 }}>{lead.title || "Untitled Lead"}</div>
-                  <div style={{ color: "#6b7280", fontSize: 13, marginBottom: 8 }}>
-                    {lead.city || "No city"} • {lead.created_at}
+          {activeTab === "assistant" && (
+            <Card className="rounded-3xl border-white/10 bg-slate-900/80 text-white">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-orange-300" /> AI Assistant
+                </CardTitle>
+                <CardDescription className="text-slate-300">
+                  Helps users feel the product during the free estimate experience.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-6 lg:grid-cols-2">
+                <div className="space-y-4">
+                  <div>
+                    <label className="mb-2 block text-sm text-slate-300">Prompt</label>
+                    <Textarea
+                      value={assistantPrompt}
+                      onChange={(e) => setAssistantPrompt(e.target.value)}
+                      className="min-h-[180px] rounded-2xl border-white/10 bg-white/5 text-white"
+                    />
                   </div>
-                  <div style={{ whiteSpace: "pre-wrap", marginBottom: 8 }}>{lead.description || "No description"}</div>
-                  <div style={{ fontSize: 14, lineHeight: 1.7 }}>
-                    <div>Status: <strong>{lead.status}</strong></div>
-                    <div>Score: <strong>{lead.score}</strong></div>
-                    <div>Contact: {lead.contact_name || "-"} / {lead.contact_info || "-"}</div>
-                  </div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-                    <button onClick={() => setOutput(buildContractorInboxAssistant({
-                      title: lead.title,
-                      description: lead.description,
-                      city: lead.city,
-                      contactName: lead.contact_name,
-                      contactInfo: lead.contact_info,
-                      budget: lead.budget,
-                    }, laborRateSetting, markupSetting).quickReply)} style={secondaryButtonStyle}>
-                      Load Reply
-                    </button>
-                    <button onClick={() => updateLeadStatus(lead.id, "quoted")} style={secondaryButtonStyle}>
-                      Quoted
-                    </button>
-                    <button onClick={() => updateLeadStatus(lead.id, "won")} style={secondaryButtonStyle}>
-                      Won
-                    </button>
-                    <button onClick={() => deleteLead(lead.id)} style={secondaryButtonStyle}>
-                      Delete
-                    </button>
+                  <Button className="rounded-2xl bg-gradient-to-r from-red-500 to-orange-500 text-white hover:opacity-90">
+                    Generate Response
+                  </Button>
+                </div>
+                <div>
+                  <label className="mb-2 block text-sm text-slate-300">Output</label>
+                  <div className="min-h-[240px] whitespace-pre-wrap rounded-3xl border border-white/10 bg-black/20 p-4 text-sm text-slate-200">
+                    {assistantOutput}
                   </div>
                 </div>
-              ))}
-            </div>
-
-            <div style={{ background: "#fffbeb", borderRadius: 12, padding: 14, border: "1px solid #e5e7eb" }}>
-              <div style={{ fontWeight: 800, marginBottom: 10 }}>{`Warm (${warmLeads.length})`}</div>
-              {warmLeads.length === 0 && <div style={{ color: "#6b7280" }}>No leads</div>}
-              {warmLeads.map((lead) => (
-                <div
-                  key={lead.id}
-                  style={{
-                    border: "1px solid #e5e7eb",
-                    borderRadius: 12,
-                    padding: 12,
-                    background: "#fff",
-                    marginBottom: 12,
-                  }}
-                >
-                  <div style={{ fontWeight: 800 }}>{lead.title || "Untitled Lead"}</div>
-                  <div style={{ color: "#6b7280", fontSize: 13, marginBottom: 8 }}>
-                    {lead.city || "No city"} • {lead.created_at}
-                  </div>
-                  <div style={{ whiteSpace: "pre-wrap", marginBottom: 8 }}>{lead.description || "No description"}</div>
-                  <div style={{ fontSize: 14, lineHeight: 1.7 }}>
-                    <div>Status: <strong>{lead.status}</strong></div>
-                    <div>Score: <strong>{lead.score}</strong></div>
-                    <div>Contact: {lead.contact_name || "-"} / {lead.contact_info || "-"}</div>
-                  </div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-                    <button onClick={() => setOutput(buildContractorInboxAssistant({
-                      title: lead.title,
-                      description: lead.description,
-                      city: lead.city,
-                      contactName: lead.contact_name,
-                      contactInfo: lead.contact_info,
-                      budget: lead.budget,
-                    }, laborRateSetting, markupSetting).quickReply)} style={secondaryButtonStyle}>
-                      Load Reply
-                    </button>
-                    <button onClick={() => updateLeadStatus(lead.id, "contacted")} style={secondaryButtonStyle}>
-                      Contacted
-                    </button>
-                    <button onClick={() => updateLeadStatus(lead.id, "quoted")} style={secondaryButtonStyle}>
-                      Quoted
-                    </button>
-                    <button onClick={() => deleteLead(lead.id)} style={secondaryButtonStyle}>
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div style={{ background: "#f8fafc", borderRadius: 12, padding: 14, border: "1px solid #e5e7eb" }}>
-              <div style={{ fontWeight: 800, marginBottom: 10 }}>{`Cold (${coldLeads.length})`}</div>
-              {coldLeads.length === 0 && <div style={{ color: "#6b7280" }}>No leads</div>}
-              {coldLeads.map((lead) => (
-                <div
-                  key={lead.id}
-                  style={{
-                    border: "1px solid #e5e7eb",
-                    borderRadius: 12,
-                    padding: 12,
-                    background: "#fff",
-                    marginBottom: 12,
-                  }}
-                >
-                  <div style={{ fontWeight: 800 }}>{lead.title || "Untitled Lead"}</div>
-                  <div style={{ color: "#6b7280", fontSize: 13, marginBottom: 8 }}>
-                    {lead.city || "No city"} • {lead.created_at}
-                  </div>
-                  <div style={{ whiteSpace: "pre-wrap", marginBottom: 8 }}>{lead.description || "No description"}</div>
-                  <div style={{ fontSize: 14, lineHeight: 1.7 }}>
-                    <div>Status: <strong>{lead.status}</strong></div>
-                    <div>Score: <strong>{lead.score}</strong></div>
-                    <div>Contact: {lead.contact_name || "-"} / {lead.contact_info || "-"}</div>
-                  </div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-                    <button onClick={() => setOutput(buildContractorInboxAssistant({
-                      title: lead.title,
-                      description: lead.description,
-                      city: lead.city,
-                      contactName: lead.contact_name,
-                      contactInfo: lead.contact_info,
-                      budget: lead.budget,
-                    }, laborRateSetting, markupSetting).followUp)} style={secondaryButtonStyle}>
-                      Load Follow-Up
-                    </button>
-                    <button onClick={() => updateLeadStatus(lead.id, "contacted")} style={secondaryButtonStyle}>
-                      Contacted
-                    </button>
-                    <button onClick={() => deleteLead(lead.id)} style={secondaryButtonStyle}>
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div
-          style={{
-            background: "rgba(255,255,255,0.96)",
-            borderRadius: 20,
-            padding: 22,
-            marginBottom: 24,
-            boxShadow: "0 16px 40px rgba(10, 14, 30, 0.16)",
-            opacity: hasAccess(plan, "pro") ? 1 : 0.96,
-          }}
-        >
-          <h2 style={{ marginTop: 0 }}>AI Marketing Generator (Pro+)</h2>
-
-          {!hasAccess(plan, "pro") && (
-            <div
-              style={{
-                background: "#fff7ed",
-                border: "1px solid #fdba74",
-                borderRadius: 12,
-                padding: 12,
-                marginBottom: 14,
-                color: "#9a3412",
-                fontWeight: 700,
-              }}
-            >
-              Upgrade to Pro or Team to generate ads, hooks, offers, and social posts.
-            </div>
+              </CardContent>
+            </Card>
           )}
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr auto",
-              gap: 12,
-              marginBottom: 12,
-            }}
-          >
-            <input
-              value={marketingJob}
-              onChange={(e) => setMarketingJob(e.target.value)}
-              placeholder="Service type (example: gravel driveway)"
-              style={inputStyle}
-            />
-            <input
-              value={marketingCity}
-              onChange={(e) => setMarketingCity(e.target.value)}
-              placeholder="City"
-              style={inputStyle}
-            />
-            <button onClick={buildMarketing} style={primaryButtonStyle}>
-              Generate
-            </button>
-          </div>
+          {activeTab === "inbox" && (
+            <Card className="rounded-3xl border-white/10 bg-slate-900/80 text-white">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Mail className="h-5 w-5 text-orange-300" /> Inbox Assistant
+                </CardTitle>
+                <CardDescription className="text-slate-300">
+                  Demo inbox triage for estimate requests and follow-up opportunities.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="relative">
+                  <Search className="absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
+                  <Input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search inbox..."
+                    className="rounded-2xl border-white/10 bg-white/5 pl-9 text-white"
+                  />
+                </div>
+                <div className="grid gap-4">
+                  {filteredInbox.map((message) => (
+                    <div key={message.id} className="rounded-3xl border border-white/10 bg-white/5 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <div className="font-semibold">{message.subject}</div>
+                          <div className="text-sm text-slate-400">{message.from} • {message.company}</div>
+                        </div>
+                        <Badge className={`rounded-full ${message.priority === "High" ? "bg-red-500/20 text-red-200" : message.priority === "Medium" ? "bg-orange-500/20 text-orange-200" : "bg-slate-500/20 text-slate-200"}`}>
+                          {message.priority}
+                        </Badge>
+                      </div>
+                      <div className="mt-3 text-sm text-slate-300">{message.summary}</div>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <Button variant="outline" className="rounded-2xl border-white/10 bg-transparent text-white hover:bg-white/10">Draft Reply</Button>
+                        <Button variant="outline" className="rounded-2xl border-white/10 bg-transparent text-white hover:bg-white/10">Create Estimate</Button>
+                        <Button variant="outline" className="rounded-2xl border-white/10 bg-transparent text-white hover:bg-white/10">Mark Hot Lead</Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
-          <textarea
-            value={marketingOutput}
-            onChange={(e) => setMarketingOutput(e.target.value)}
-            style={{
-              width: "100%",
-              minHeight: 220,
-              padding: 12,
-              borderRadius: 12,
-              border: "1px solid #d1d5db",
-              boxSizing: "border-box",
-            }}
-            placeholder="Generated marketing content will appear here..."
-          />
+          {activeTab === "leads" && (
+            <Card className="rounded-3xl border-white/10 bg-slate-900/80 text-white">
+              <CardHeader>
+                <CardTitle>Lead Pipeline</CardTitle>
+                <CardDescription className="text-slate-300">Simple contractor CRM view for demos and early sales.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                {crmLeads.map((lead) => (
+                  <Card key={lead.name} className="rounded-3xl border-white/10 bg-white/5 text-white">
+                    <CardContent className="p-5">
+                      <div className="text-lg font-bold">{lead.name}</div>
+                      <div className="mt-2 text-3xl font-black text-orange-300">{lead.value}</div>
+                      <Badge className="mt-3 rounded-full bg-white/10 text-slate-200 hover:bg-white/10">{lead.status}</Badge>
+                    </CardContent>
+                  </Card>
+                ))}
+              </CardContent>
+            </Card>
+          )}
         </div>
-      </div>
-    </div>
-  );
-}
+      </section>
+
+      <section className="mt-10 grid gap-6 md:grid-cols-3">
+        {[
+          {
+            icon: Phone,
+            title: "Local sales ready",
+            desc: "You can call local contractors and let them test 3 free AI-assisted estimates right away.",
+          },
+          {
+            icon: Download,
+            title: "PWA direction",
+            desc: "This structure is positioned for installable web app deployment on mobile and desktop.",
+          },
+          {
+            icon: Sparkles,
+            title: "Expand next",
+            desc: "Stripe, auth, PDF export, and true AI / inbox integrations are the next production layer.",
+          },
+        ].map((item) => (
+          <Card key={item.title} className="rounded-3xl border-white/10 bg-slate-900/70 text-white">
+            <CardContent className="p-5">
+              <item.icon className="mb-3 h-7 w-7 text-orange-300" />
+              <div className="font-semibold">{item.title}</div>
+              <div className="mt-2 text-sm text-slate-300">{item.desc}</div>
+            </CardContent>
+          </Card>
+        ))}
+      </section>
+    </main>
+  </div>
+</div>
+
+); }
