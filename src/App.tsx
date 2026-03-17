@@ -10,7 +10,11 @@ function currency(n: number) { return new Intl.NumberFormat("en-US", { style: "c
 
 function estimateAIRecommendations(trade: string, scope: string, budget: string) { const notes = [ Recommend clear scope wording for ${trade.toLowerCase()} work to reduce change-order disputes., "Add a materials allowance clause to protect margin from supplier fluctuations.", "Include schedule language, payment terms, and exclusions in the final estimate.", ];
 
-if (scope.toLowerCase().includes("demo") || scope.toLowerCase().includes("remove")) { notes.push("Add debris hauling and disposal as a separate line item."); } if (budget) { notes.push(Customer mentioned target budget around ${budget}; consider a good / better / best option set.); } return notes; }
+if (scope.toLowerCase().includes("demo") || scope.toLowerCase().includes("remove")) { notes.push("Add debris hauling and disposal as a separate line item."); }
+
+if (budget) { notes.push(Customer mentioned target budget around ${budget}; consider a good / better / best option set.); }
+
+return notes; }
 
 export default function TradesmanAIStableBuild() { const [mobileMenuOpen, setMobileMenuOpen] = useState(false); const [activeTab, setActiveTab] = useState("dashboard"); const [signedIn, setSignedIn] = useState(true); const [plan] = useState("Starter"); const [freeEstimatesRemaining, setFreeEstimatesRemaining] = useState(3); const [trade, setTrade] = useState("General"); const [clientName, setClientName] = useState("John Carter"); const [projectName, setProjectName] = useState("Backyard retaining wall repair"); const [scope, setScope] = useState( "Repair failed retaining wall section, regrade affected area, haul debris, and restore drainage path." ); const [budget, setBudget] = useState("$8,000 - $12,000"); const [markup, setMarkup] = useState(18); const [search, setSearch] = useState(""); const [assistantPrompt, setAssistantPrompt] = useState( "Write a professional follow-up message for a customer who has not responded to an estimate in 5 days." );
 
