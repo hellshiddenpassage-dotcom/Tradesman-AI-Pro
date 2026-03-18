@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 type TradeKey =
   | "General"
@@ -9,22 +9,11 @@ type TradeKey =
   | "Fabrication"
   | "Automotive";
 
-type TabKey = "dashboard" | "estimate" | "assistant" | "inbox";
-
 type LineItem = {
   name: string;
   qty: number;
   unit: string;
   rate: number;
-};
-
-type InboxMessage = {
-  id: number;
-  from: string;
-  company: string;
-  subject: string;
-  priority: "High" | "Medium" | "Low";
-  summary: string;
 };
 
 const tradeTemplates: Record<TradeKey, LineItem[]> = {
@@ -53,16 +42,12 @@ const tradeTemplates: Record<TradeKey, LineItem[]> = {
     { name: "Operator Labor", qty: 6, unit: "hrs", rate: 85 },
     { name: "Haul / Disposal", qty: 1, unit: "lot", rate: 240 },
   ],
-
-  // ✅ ADDED
   Fabrication: [
     { name: "Design / Layout", qty: 2, unit: "hrs", rate: 95 },
     { name: "Fabrication Labor", qty: 6, unit: "hrs", rate: 110 },
     { name: "Material", qty: 1, unit: "lot", rate: 400 },
     { name: "Welding / Finishing", qty: 2, unit: "hrs", rate: 110 },
   ],
-
-  // ✅ ADDED
   Automotive: [
     { name: "Diagnostics", qty: 1, unit: "job", rate: 120 },
     { name: "Labor", qty: 3, unit: "hrs", rate: 95 },
@@ -70,33 +55,6 @@ const tradeTemplates: Record<TradeKey, LineItem[]> = {
     { name: "Shop Supplies", qty: 1, unit: "lot", rate: 45 },
   ],
 };
-
-const inboxMessages: InboxMessage[] = [
-  {
-    id: 1,
-    from: "Sarah Johnson",
-    company: "Johnson Property Group",
-    subject: "Need bid for retaining wall repair",
-    priority: "High",
-    summary: "Wants a fast quote this week.",
-  },
-  {
-    id: 2,
-    from: "Mike Torres",
-    company: "Homeowner",
-    subject: "Concrete patio add-on",
-    priority: "Medium",
-    summary: "Asked about extending patio.",
-  },
-  {
-    id: 3,
-    from: "Alicia Reed",
-    company: "Retail LLC",
-    subject: "Electrical follow-up",
-    priority: "Low",
-    summary: "Needs revised quote.",
-  },
-];
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-US", {
@@ -106,10 +64,11 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
-function App() {
-  const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
+export default function App() {
   const [trade, setTrade] = useState<TradeKey>("General");
-  const [lineItems, setLineItems] = useState<LineItem[]>([...tradeTemplates.General]);
+  const [lineItems, setLineItems] = useState<LineItem[]>([
+    ...tradeTemplates.General,
+  ]);
   const [markup, setMarkup] = useState<number>(18);
 
   const subtotal = useMemo(
@@ -193,9 +152,17 @@ function App() {
       <div className="mt-6">
         <div>Subtotal: {formatCurrency(subtotal)}</div>
         <div>Total: {formatCurrency(total)}</div>
+
+        <div className="mt-4">
+          <label>Markup %: </label>
+          <input
+            type="number"
+            value={markup}
+            onChange={(e) => setMarkup(Number(e.target.value) || 0)}
+            className="bg-slate-800 ml-2 w-20"
+          />
+        </div>
       </div>
     </div>
   );
 }
-
-export default App;
