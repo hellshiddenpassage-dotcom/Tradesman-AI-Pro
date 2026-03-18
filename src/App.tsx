@@ -54,15 +54,15 @@ const tradeTemplates: Record<TradeKey, LineItem[]> = {
     { name: "Haul / Disposal", qty: 1, unit: "lot", rate: 240 },
   ],
 
-  // ✅ NEW — FABRICATION
+  // ✅ ADDED
   Fabrication: [
     { name: "Design / Layout", qty: 2, unit: "hrs", rate: 95 },
     { name: "Fabrication Labor", qty: 6, unit: "hrs", rate: 110 },
-    { name: "Material (Steel / Aluminum)", qty: 1, unit: "lot", rate: 400 },
+    { name: "Material", qty: 1, unit: "lot", rate: 400 },
     { name: "Welding / Finishing", qty: 2, unit: "hrs", rate: 110 },
   ],
 
-  // ✅ NEW — AUTOMOTIVE
+  // ✅ ADDED
   Automotive: [
     { name: "Diagnostics", qty: 1, unit: "job", rate: 120 },
     { name: "Labor", qty: 3, unit: "hrs", rate: 95 },
@@ -78,27 +78,27 @@ const inboxMessages: InboxMessage[] = [
     company: "Johnson Property Group",
     subject: "Need bid for retaining wall repair",
     priority: "High",
-    summary: "Wants a fast quote this week for erosion and wall failure behind duplex.",
+    summary: "Wants a fast quote this week.",
   },
   {
     id: 2,
     from: "Mike Torres",
     company: "Homeowner",
-    subject: "Concrete patio add-on question",
+    subject: "Concrete patio add-on",
     priority: "Medium",
-    summary: "Asked whether the patio can be extended and what timeline looks like.",
+    summary: "Asked about extending patio.",
   },
   {
     id: 3,
     from: "Alicia Reed",
-    company: "Reed Retail LLC",
-    subject: "Electrical estimate follow-up",
+    company: "Retail LLC",
+    subject: "Electrical follow-up",
     priority: "Low",
-    summary: "Needs a revised quote with alternate fixture pricing.",
+    summary: "Needs revised quote.",
   },
 ];
 
-function formatCurrency(value: number): string {
+function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
@@ -106,164 +106,93 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-function getRecommendations(trade: string, scope: string, budget: string): string[] {
-  const notes: string[] = [
-    `Recommend clear scope wording for ${trade.toLowerCase()} work to reduce change-order disputes.`,
-    "Add a materials allowance clause to protect margin from supplier fluctuations.",
-    "Include schedule language, payment terms, and exclusions in the final estimate.",
-  ];
-
-  const scopeLower = scope.toLowerCase();
-
-  if (scopeLower.includes("demo") || scopeLower.includes("remove")) {
-    notes.push("Add debris hauling and disposal as a separate line item.");
-  }
-
-  if (budget.trim()) {
-    notes.push(`Customer mentioned target budget around ${budget}; consider a good / better / best option set.`);
-  }
-
-  return notes;
-}
-
-function StatCard(props: { label: string; value: string }) {
-  return (
-    <div className="rounded-3xl border border-white/10 bg-slate-900 p-5 shadow-lg">
-      <div className="text-sm text-slate-400">{props.label}</div>
-      <div className="mt-2 text-3xl font-black text-white">{props.value}</div>
-    </div>
-  );
-}
-
-function SectionCard(props: { title: string; subtitle?: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-3xl border border-white/10 bg-slate-900 p-5 shadow-lg">
-      <div className="mb-4">
-        <h2 className="text-xl font-bold text-white">{props.title}</h2>
-        {props.subtitle ? <p className="mt-1 text-sm text-slate-400">{props.subtitle}</p> : null}
-      </div>
-      {props.children}
-    </div>
-  );
-}
-
 function App() {
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
   const [trade, setTrade] = useState<TradeKey>("General");
   const [lineItems, setLineItems] = useState<LineItem[]>([...tradeTemplates.General]);
-  const [clientName, setClientName] = useState<string>("John Carter");
-  const [projectName, setProjectName] = useState<string>("Backyard retaining wall repair");
-  const [scope, setScope] = useState<string>(
-    "Repair failed retaining wall section, regrade affected area, haul debris, and restore drainage path."
-  );
-  const [budget, setBudget] = useState<string>("$8,000 - $12,000");
   const [markup, setMarkup] = useState<number>(18);
-  const [freeEstimatesRemaining, setFreeEstimatesRemaining] = useState<number>(3);
-  const [search, setSearch] = useState<string>("");
 
-  const subtotal = useMemo(() => {
-    return lineItems.reduce((sum, item) => sum + item.qty * item.rate, 0);
-  }, [lineItems]);
+  const subtotal = useMemo(
+    () => lineItems.reduce((sum, i) => sum + i.qty * i.rate, 0),
+    [lineItems]
+  );
 
-  const total = useMemo(() => {
-    return subtotal * (1 + markup / 100);
-  }, [subtotal, markup]);
+  const total = useMemo(
+    () => subtotal * (1 + markup / 100),
+    [subtotal, markup]
+  );
 
-  const recommendations = useMemo(() => {
-    return getRecommendations(trade, scope, budget);
-  }, [trade, scope, budget]);
-
-  const filteredInbox = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return inboxMessages;
-
-    return inboxMessages.filter((message) => {
-      const haystack = [
-        message.from,
-        message.company,
-        message.subject,
-        message.priority,
-        message.summary,
-      ]
-        .join(" ")
-        .toLowerCase();
-
-      return haystack.includes(q);
-    });
-  }, [search]);
-
-  const assistantOutput = useMemo(() => {
-    return `Subject: Quick follow-up on your estimate
-
-Hi ${clientName},
-
-I wanted to follow up on the estimate I sent over for ${projectName}. Just checking to see if you had any questions, wanted any revisions, or if you'd like to get on the schedule.
-
-If it helps, I can also provide an updated option based on your budget or timeline.
-
-Thanks,
-Tradesman AI User`;
-  }, [clientName, projectName]);
-
-  function switchTrade(nextTrade: TradeKey) {
-    setTrade(nextTrade);
-    setLineItems([...tradeTemplates[nextTrade]]);
+  function switchTrade(next: TradeKey) {
+    setTrade(next);
+    setLineItems([...tradeTemplates[next]]);
   }
 
-  function updateLineItem(index: number, field: keyof LineItem, value: string) {
+  function updateItem(i: number, field: keyof LineItem, value: string) {
     setLineItems((prev) =>
-      prev.map((item, i) => {
-        if (i !== index) return item;
-
-        if (field === "qty" || field === "rate") {
-          return {
-            ...item,
-            [field]: Number(value) || 0,
-          };
-        }
-
-        return {
-          ...item,
-          [field]: value,
-        } as LineItem;
-      })
+      prev.map((item, idx) =>
+        idx === i
+          ? {
+              ...item,
+              [field]:
+                field === "qty" || field === "rate"
+                  ? Number(value) || 0
+                  : value,
+            }
+          : item
+      )
     );
   }
 
-  function addLineItem() {
-    setLineItems((prev) => [
-      ...prev,
-      { name: "Custom Line Item", qty: 1, unit: "ea", rate: 100 },
-    ]);
-  }
-
-  function useFreeEstimate() {
-    setFreeEstimatesRemaining((prev) => (prev > 0 ? prev - 1 : 0));
-  }
-
-  function priorityClass(priority: InboxMessage["priority"]): string {
-    if (priority === "High") return "bg-red-500/20 text-red-200";
-    if (priority === "Medium") return "bg-orange-500/20 text-orange-200";
-    return "bg-slate-500/20 text-slate-200";
-  }
-
-  const tabButtonBase =
-    "rounded-2xl border px-4 py-2 text-sm font-semibold transition";
-  const inactiveTab =
-    "border-white/15 bg-white/5 text-white hover:bg-white/10";
-  const activeTabClass =
-    "border-orange-500 bg-orange-500 text-white hover:bg-orange-500/90";
-
   return (
-    <div className="min-h-screen bg-slate-950 text-white">
-      <div className="bg-[radial-gradient(circle_at_top_right,rgba(249,115,22,0.18),transparent_25%),radial-gradient(circle_at_top_left,rgba(239,68,68,0.2),transparent_28%)]">
-        <div className="mx-auto max-w-7xl px-4 py-8 md:px-6">
+    <div className="p-6 text-white bg-slate-900 min-h-screen">
+      <h1 className="text-3xl font-bold mb-6">Tradesman AI</h1>
 
-          {/* --- REST OF YOUR UI REMAINS EXACTLY THE SAME --- */}
+      <div className="mb-4 flex gap-2 flex-wrap">
+        {(Object.keys(tradeTemplates) as TradeKey[]).map((t) => (
+          <button
+            key={t}
+            onClick={() => switchTrade(t)}
+            className={`px-4 py-2 rounded ${
+              trade === t ? "bg-orange-500" : "bg-slate-700"
+            }`}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
 
-          {/* I did NOT change anything else in your app */}
-          
-        </div>
+      <div className="space-y-3">
+        {lineItems.map((item, i) => (
+          <div key={i} className="flex gap-2">
+            <input
+              value={item.name}
+              onChange={(e) => updateItem(i, "name", e.target.value)}
+              className="bg-slate-800 px-2"
+            />
+            <input
+              type="number"
+              value={item.qty}
+              onChange={(e) => updateItem(i, "qty", e.target.value)}
+              className="bg-slate-800 w-20"
+            />
+            <input
+              value={item.unit}
+              onChange={(e) => updateItem(i, "unit", e.target.value)}
+              className="bg-slate-800 w-20"
+            />
+            <input
+              type="number"
+              value={item.rate}
+              onChange={(e) => updateItem(i, "rate", e.target.value)}
+              className="bg-slate-800 w-24"
+            />
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-6">
+        <div>Subtotal: {formatCurrency(subtotal)}</div>
+        <div>Total: {formatCurrency(total)}</div>
       </div>
     </div>
   );
