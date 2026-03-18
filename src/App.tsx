@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+rt { useMemo, useState } from "react";
 
 type TradeKey =
   | "General"
